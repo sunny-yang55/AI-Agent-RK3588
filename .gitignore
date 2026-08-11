@@ -13,6 +13,14 @@ speech_v1_1/artifacts/*.npy
 speech_v1_1/artifacts/*.log
 speech_v1_1/artifacts/*.txt
 
+# v1.2 real-audio model assets and generated baselines
+speech_v1_2/models/*.onnx
+speech_v1_2/models/*.rknn
+speech_v1_2/models/*.json
+speech_v1_2/models/*.model
+speech_v1_2/artifacts/*
+!speech_v1_2/artifacts/README.md
+
 # Local editor and OS files
 .vscode/
 .idea/

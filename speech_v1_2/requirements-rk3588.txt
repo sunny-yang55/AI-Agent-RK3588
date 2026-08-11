@@ -1,0 +1,2 @@
+numpy==1.26.4
+# RKNN Toolkit2/Lite2 2.3.2 must be installed from the official ARM64 wheels.
