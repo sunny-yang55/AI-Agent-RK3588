@@ -43,8 +43,10 @@ python speech_v1_2\scripts\01_export_time100_onnx.py `
   --output speech_v1_2\models\sensevoice_time100.onnx
 ```
 
-新包装器在模型内部拼接四个查询帧，并保留独立的有效长度输入。不要覆盖 v1.1 的
-`sensevoice_fixed.onnx`。
+新包装器在模型内部拼接四个查询帧，并保留独立的有效长度输入。注意力掩码始终
+保持100帧静态宽度，只把有效长度之后的位置标记为padding，以兼容ONNX和RKNN
+的固定输入图。导出脚本还会用94帧有效长度立即实跑一次ONNX，只有该回归检查
+通过才会输出 `ONNX export: PASS`。不要覆盖 v1.1 的 `sensevoice_fixed.onnx`。
 
 ## 3. Windows：生成真实音频特征与官方文本
 

@@ -50,9 +50,33 @@ def main() -> int:
             encoder_input = torch.cat((queries, speech), dim=1)
             encoder_lengths = lengths + len(QUERY_IDS)
 
-            encoder_out, _ = self.model.encoder(encoder_input, encoder_lengths)
-            if isinstance(encoder_out, tuple):
-                encoder_out = encoder_out[0]
+            # FunASR 1.1.3 builds sequence_mask() to max(encoder_lengths).
+            # That produces a width-98 mask for the 94-frame sample even though
+            # the exported encoder state is statically width 100.  Build the
+            # same padding mask explicitly at the fixed model width instead.
+            encoder = self.model.encoder
+            positions = torch.arange(
+                TOTAL_FRAMES,
+                dtype=encoder_lengths.dtype,
+                device=encoder_lengths.device,
+            )
+            masks = positions.unsqueeze(0) < encoder_lengths.unsqueeze(1)
+            masks = masks.unsqueeze(1)
+
+            encoder_out = encoder_input * (encoder.output_size() ** 0.5)
+            encoder_out = encoder.embed(encoder_out)
+            for layer in encoder.encoders0:
+                layer_out = layer(encoder_out, masks)
+                encoder_out, masks = layer_out[0], layer_out[1]
+            for layer in encoder.encoders:
+                layer_out = layer(encoder_out, masks)
+                encoder_out, masks = layer_out[0], layer_out[1]
+            encoder_out = encoder.after_norm(encoder_out)
+            for layer in encoder.tp_encoders:
+                layer_out = layer(encoder_out, masks)
+                encoder_out, masks = layer_out[0], layer_out[1]
+            encoder_out = encoder.tp_norm(encoder_out)
+
             return self.model.ctc.ctc_lo(encoder_out)
 
     version = getattr(funasr, "__version__", "unknown")
@@ -72,8 +96,11 @@ def main() -> int:
     dummy_lengths = torch.tensor([MAX_AUDIO_FRAMES], dtype=torch.float32)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    # Use a non-maximum length here so the export check covers the real 94-frame
+    # sample that originally exposed a 98-vs-100 attention-mask mismatch.
+    probe_lengths = torch.tensor([MAX_AUDIO_FRAMES - 2], dtype=torch.float32)
     with torch.inference_mode():
-        probe = wrapper(dummy_speech, dummy_lengths)
+        probe = wrapper(dummy_speech, probe_lengths)
     expected_output = (1, TOTAL_FRAMES, VOCAB_SIZE)
     if tuple(probe.shape) != expected_output:
         raise RuntimeError(
@@ -91,6 +118,39 @@ def main() -> int:
         do_constant_folding=True,
     )
 
+    # An ONNX file being written is not enough: immediately execute it with a
+    # 94-frame valid length to catch static/dynamic mask-width regressions.
+    import numpy as np
+    import onnxruntime as ort
+
+    session = ort.InferenceSession(
+        str(args.output), providers=["CPUExecutionProvider"]
+    )
+    onnx_probe = session.run(
+        ["logits"],
+        {
+            "speech": dummy_speech.numpy(),
+            "speech_lengths": probe_lengths.numpy(),
+        },
+    )[0]
+    if tuple(onnx_probe.shape) != expected_output:
+        raise RuntimeError(
+            f"unexpected ONNX probe output: expected {expected_output}, "
+            f"got {tuple(onnx_probe.shape)}"
+        )
+    if not np.isfinite(onnx_probe).all():
+        raise RuntimeError("ONNX 94-frame probe contains NaN or Inf")
+    probe_np = probe.detach().cpu().numpy()
+    max_abs = float(np.max(np.abs(onnx_probe - probe_np)))
+    top1_agreement = float(
+        np.mean(np.argmax(onnx_probe, axis=-1) == np.argmax(probe_np, axis=-1))
+    )
+    if max_abs > 1e-2 or top1_agreement < 0.999:
+        raise RuntimeError(
+            "ONNX 94-frame probe does not match PyTorch: "
+            f"max_abs={max_abs:.6g}, top1_agreement={top1_agreement:.6f}"
+        )
+
     print(f"FunASR: {version}")
     print(f"model root: {args.model_root}")
     print(f"query ids: {QUERY_IDS}")
@@ -98,6 +158,10 @@ def main() -> int:
     print("length input: (1,) float32")
     print(f"logits output: {expected_output} float32")
     print(f"ONNX: {args.output} ({args.output.stat().st_size} bytes)")
+    print(
+        "ONNX 94-frame probe: PASS "
+        f"(max_abs={max_abs:.6g}, top1_agreement={top1_agreement:.6f})"
+    )
     print("ONNX export: PASS")
     return 0
 
