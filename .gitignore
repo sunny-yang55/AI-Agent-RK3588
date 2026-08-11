@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# SenseVoice model artifacts (large files)
+speech_v1_1/models/*.onnx
+speech_v1_1/models/*.rknn
+
+# Generated baselines, outputs and logs
+speech_v1_1/artifacts/*.npy
+speech_v1_1/artifacts/*.log
+speech_v1_1/artifacts/*.txt
+
+# Local editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
