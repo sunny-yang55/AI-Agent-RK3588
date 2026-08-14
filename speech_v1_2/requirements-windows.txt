@@ -1,5 +1,0 @@
-numpy==1.26.4
-onnx==1.16.1
-onnxruntime==1.18.1
-# Keep the already validated frontend/export behavior reproducible.
-funasr==1.1.3

@@ -1,28 +1,43 @@
-# Python
+# Python environments and caches
+venv/
+.venv/
 __pycache__/
 *.py[cod]
-.venv/
-venv/
 
-# SenseVoice model artifacts (large files)
-speech_v1_1/models/*.onnx
-speech_v1_1/models/*.rknn
+# Secrets and machine-local configuration
+config/.env
+config/.env.*
+!config/.env.*.example
 
-# Generated baselines, outputs and logs
-speech_v1_1/artifacts/*.npy
-speech_v1_1/artifacts/*.log
-speech_v1_1/artifacts/*.txt
+# Runtime data
+logs/
+data/
+*.log
 
-# v1.2 real-audio model assets and generated baselines
-speech_v1_2/models/*.onnx
-speech_v1_2/models/*.rknn
-speech_v1_2/models/*.json
-speech_v1_2/models/*.model
-speech_v1_2/artifacts/*
-!speech_v1_2/artifacts/README.md
+# Large runtime models and local binary wheels
+models/**/*.rknn
+models/**/*.onnx
+models/**/*.pt
+vendor/wheels/*.whl
+!models/**/README.md
+!models/manifest.sha256
 
-# Local editor and OS files
+# Build and migration outputs
+*.tar.gz
+*.img
+*.img.xz
+board-inventory-*.txt
+quarantine-*/
+
+# Editors and operating systems
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Machine-local migration state
+MIGRATION_STATE.txt
+requirements-installed.txt
+
+# Exported RKNN runtime binary; shipped with image/release artifact
+vendor/rknn-runtime-site/

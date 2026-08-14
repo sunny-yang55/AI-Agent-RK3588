@@ -1,0 +1,17 @@
+[Unit]
+Description=XiaoAn RK3588 Voice Assistant
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ztl
+Group=ztl
+WorkingDirectory=/home/ztl/AI-Agent-RK3588
+ExecStart=/home/ztl/AI-Agent-RK3588/run_rk3588.sh
+Restart=on-failure
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
