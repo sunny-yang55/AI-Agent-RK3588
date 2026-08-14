@@ -1,0 +1,24 @@
+# Runtime-only dependencies for Python 3.10 on RK3588.
+# rknn-toolkit-lite2 is installed from vendor/wheels by scripts/install_runtime.sh.
+aiohttp==3.14.3
+edge-tts==7.2.8
+numpy==1.26.4
+openai==2.48.0
+piper-tts==1.6.0
+pygame==2.6.1
+pydantic==2.13.4
+python-dotenv==1.2.2
+PyYAML==6.0.3
+requests==2.34.2
+scipy==1.15.3
+sounddevice==0.5.5
+typing_extensions==4.15.0
+webrtcvad==2.0.10
+
+flatbuffers==25.12.19
+psutil==7.2.2
+ruamel.yaml==0.19.1
+
+flatbuffers==25.12.19
+psutil==7.2.2
+ruamel.yaml==0.19.1

@@ -1,0 +1,29 @@
+{
+  "default_model": "qwen3.7-max",
+
+  "provider": {
+    "name": "company",
+
+    "base_url": "https://llm-7hoxect8al0vp4h3.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+  },
+
+  "models": [
+    {
+      "id": "qwen3.7-max",
+      "name": "Qwen 3.7 Max",
+      "role": "general"
+    },
+
+    {
+      "id": "deepseek-v4-pro",
+      "name": "DeepSeek V4 Pro",
+      "role": "reasoning"
+    },
+
+    {
+      "id": "kimi/kimi-k2.7-code",
+      "name": "Kimi K2.7 Code",
+      "role": "coding"
+    }
+  ]
+}

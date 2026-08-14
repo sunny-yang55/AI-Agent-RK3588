@@ -1,0 +1,104 @@
+{
+    "company": {
+
+        "长鑫存储": {
+
+            "official":
+            "长鑫存储技术有限公司",
+
+            "aliases":[
+
+                "长鑫",
+                "长新存储",
+                "长信存储",
+                "长兴存储",
+                "长兴成储",
+                "长新"
+
+            ],
+
+            "pinyin":
+            "chang xin cun chu",
+
+            "description":
+            "中国DRAM存储芯片企业"
+
+        },
+
+
+        "科大讯飞": {
+
+            "official":
+            "科大讯飞股份有限公司",
+
+            "aliases":[
+
+                "讯飞",
+                "科讯飞",
+                "科大飞",
+                "科大讯飞"
+
+            ],
+
+            "pinyin":
+            "ke da xun fei",
+
+            "description":
+            "人工智能和语音技术企业"
+
+        }
+
+    },
+
+
+    "university": {
+
+
+        "安徽工程大学": {
+
+
+            "official":
+            "安徽工程大学",
+
+
+            "aliases":[
+
+                "安工程",
+                "安徽工程",
+                "安工大",
+                "工程大学"
+
+            ],
+
+
+            "pinyin":
+            "an hui gong cheng da xue"
+
+
+        }
+,
+        "皖南医科大学": {
+
+
+            "official":
+            "皖南医科大学",
+
+
+            "aliases":[
+
+                "皖南医学院",
+                "医学院",
+                "皖医大"
+
+            ],
+
+
+            "pinyin":
+            "wan nan yi ke da xue"
+
+
+        }
+
+    }
+
+}

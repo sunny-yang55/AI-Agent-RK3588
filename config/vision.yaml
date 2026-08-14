@@ -1,0 +1,12 @@
+# ======================================
+# Vision Platform Configuration
+# AI-Agent
+# Python 3.10
+# ======================================
+
+vision:
+  backend: yolo
+
+  yolo:
+    model_path: models/vision/yolov8n.pt
+    confidence: 0.25
