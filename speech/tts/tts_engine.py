@@ -114,19 +114,21 @@ class TTSEngine:
             ui.debug("[TTS] 已播出部分内容；为避免重复，不再从头回退整篇")
             return False
 
-        # Edge is an online service and can legitimately return no audio.
-        # Prefer a configured local voice, then espeak-ng, and only then make
-        # bounded final Edge attempts so a transient outage does not silently
-        # discard an entire answer.
+        # Do not silently change a natural Edge voice into a mechanical local
+        # voice. Offline fallback remains opt-in for deployments that prefer
+        # guaranteed speech over consistent voice quality.
         if self.backend_name == "edge":
-            if piper_available():
+            allow_offline = os.getenv(
+                "AI_AGENT_TTS_OFFLINE_FALLBACK", "0"
+            ).lower() not in {"0", "false", "no"}
+            if allow_offline and piper_available():
                 ui.debug("[TTS] Edge-TTS失败，自动回退 Piper（离线）")
                 fallback = self._create_backend("piper")
                 self._install_playback_callback(fallback)
                 self._active_backend = fallback
                 if fallback.speak(text):
                     return True
-            if shutil.which("espeak-ng"):
+            if allow_offline and shutil.which("espeak-ng"):
                 ui.debug("[TTS] Edge-TTS失败，自动回退 espeak-ng（离线）")
                 fallback = self._create_backend("espeak")
                 self._playback_started.set()
@@ -134,7 +136,7 @@ class TTSEngine:
                 if fallback.speak(text):
                     return True
 
-            attempts = max(0, int(os.getenv("AI_AGENT_TTS_FAILOVER_RETRIES", "2")))
+            attempts = max(0, int(os.getenv("AI_AGENT_TTS_FAILOVER_RETRIES", "0")))
             for attempt in range(1, attempts + 1):
                 if self._stop_requested.is_set():
                     return False
@@ -146,7 +148,9 @@ class TTSEngine:
                     ui.debug(f"[TTS] Edge 第 {attempt} 次容错重试成功")
                     return True
 
-        ui.debug("[TTS] 所有可用播报后端均失败，本轮仅保留文字")
+        ui.debug("[TTS] 在线语音不可用，本句仅保留文字；下一句将重新尝试 Edge")
+        if ui.USER_MODE:
+            ui.state("在线语音暂时不可用，已保留文字", "!")
         return False
 
     def stop(self):

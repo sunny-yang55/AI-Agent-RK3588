@@ -13,7 +13,21 @@ import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import (
+    APIConnectionError,
+    APITimeoutError,
+    InternalServerError,
+    OpenAI,
+    RateLimitError,
+)
+
+
+_RETRYABLE_ERRORS = (
+    APIConnectionError,
+    APITimeoutError,
+    InternalServerError,
+    RateLimitError,
+)
 
 
 class LLMAdapter:
@@ -67,7 +81,41 @@ class LLMAdapter:
         if not self.api_key:
             raise RuntimeError("LLM_API_KEY not configured")
 
-        self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        self.request_timeout = max(
+            3.0, float(os.getenv("AI_AGENT_LLM_TIMEOUT", "20"))
+        )
+        self.retry_attempts = max(
+            0, int(os.getenv("AI_AGENT_LLM_RETRIES", "1"))
+        )
+        # Disable the SDK's hidden retries so latency and retry logging remain
+        # bounded and visible at this layer.
+        self.client = OpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            timeout=self.request_timeout,
+            max_retries=0,
+        )
+
+    def _retry_delay(self, attempt: int) -> float:
+        base = max(0.0, float(os.getenv("AI_AGENT_LLM_RETRY_DELAY", "0.5")))
+        return min(2.0, base * attempt)
+
+    def _create_with_retry(self, kwargs, *, stream: bool):
+        for attempt in range(1, self.retry_attempts + 2):
+            try:
+                return self.client.chat.completions.create(
+                    **kwargs, stream=stream
+                )
+            except _RETRYABLE_ERRORS as exc:
+                if attempt > self.retry_attempts:
+                    raise
+                delay = self._retry_delay(attempt)
+                print(
+                    f"[LLM] 网络请求失败，将重试 "
+                    f"{attempt}/{self.retry_attempts}: {type(exc).__name__}"
+                )
+                if delay:
+                    time.sleep(delay)
 
     def _messages(self, message):
         return [
@@ -120,6 +168,8 @@ class LLMAdapter:
 - 必须自然收尾，绝不能在逗号、冒号、专有名词或半句话处停止。
 - 接近长度限制时主动结束当前句，不要继续开启新的要点。
 - 景点、专业或其他例子最多列举4个；不要用重复总结凑长度。
+- 缺少关键条件时，只提出一个简短、自然的反问；不要擅自补造答案。
+- 可以自然互动，但不要在每次回答末尾机械询问是否还需要帮助。
 """,
                 },
                 {"role": "user", "content": message},
@@ -136,20 +186,36 @@ class LLMAdapter:
             kwargs["max_tokens"] = max_tokens
 
         if on_token is None:
-            response = self.client.chat.completions.create(**kwargs)
+            response = self._create_with_retry(kwargs, stream=False)
             return response.choices[0].message.content
 
         started = time.perf_counter()
         first_token_s = None
         pieces = []
-        response = self.client.chat.completions.create(**kwargs, stream=True)
-        for chunk in response:
-            content = chunk.choices[0].delta.content if chunk.choices else None
-            if not content:
-                continue
-            if first_token_s is None:
-                first_token_s = time.perf_counter() - started
-            pieces.append(content)
-            on_token(content)
+        for attempt in range(1, self.retry_attempts + 2):
+            try:
+                response = self.client.chat.completions.create(
+                    **kwargs, stream=True
+                )
+                for chunk in response:
+                    content = chunk.choices[0].delta.content if chunk.choices else None
+                    if not content:
+                        continue
+                    if first_token_s is None:
+                        first_token_s = time.perf_counter() - started
+                    pieces.append(content)
+                    on_token(content)
+                break
+            except _RETRYABLE_ERRORS as exc:
+                # Never replay a stream after text has reached the UI/TTS.
+                if pieces or attempt > self.retry_attempts:
+                    raise
+                delay = self._retry_delay(attempt)
+                print(
+                    f"[LLM] 流式连接中断，将重试 "
+                    f"{attempt}/{self.retry_attempts}: {type(exc).__name__}"
+                )
+                if delay:
+                    time.sleep(delay)
 
         return "".join(pieces)

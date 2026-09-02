@@ -16,7 +16,6 @@ import edge_tts
 import pygame
 
 from .synthesizer import SpeechSynthesizer
-from .piper_tts_backend import piper_available
 import voice_ui as ui
 
 logger = logging.getLogger(__name__)
@@ -28,7 +27,6 @@ class EdgeTTS(SpeechSynthesizer):
         pygame.mixer.init()
         self._stopped = threading.Event()
         self._channel = pygame.mixer.Channel(0)
-        self._piper = None
         self.partial_output = False
         self._playback_started = None
         logger.info("EdgeTTS initialized")
@@ -58,7 +56,7 @@ class EdgeTTS(SpeechSynthesizer):
 
     @staticmethod
     def _split_text(text: str) -> list[str]:
-        max_chars = max(40, int(os.getenv("AI_AGENT_EDGE_CHUNK_CHARS", "110")))
+        max_chars = max(24, int(os.getenv("AI_AGENT_EDGE_CHUNK_CHARS", "45")))
         sentences = [part.strip() for part in re.findall(r".*?[。！？!?；;]|.+$", text) if part.strip()]
         chunks: list[str] = []
         current = ""
@@ -78,7 +76,7 @@ class EdgeTTS(SpeechSynthesizer):
 
     async def _save_chunk(self, text: str, filename: str) -> None:
         voice = os.getenv("AI_AGENT_EDGE_VOICE", "zh-CN-YunxiNeural")
-        timeout = max(1.0, float(os.getenv("AI_AGENT_EDGE_TIMEOUT", "8")))
+        timeout = max(1.0, float(os.getenv("AI_AGENT_EDGE_TIMEOUT", "6")))
         try:
             await asyncio.wait_for(
                 edge_tts.Communicate(text=text, voice=voice).save(filename),
@@ -88,7 +86,7 @@ class EdgeTTS(SpeechSynthesizer):
             raise TimeoutError(f"Edge-TTS单段超过 {timeout:g} 秒") from exc
 
     def _synthesize_one(self, index: int, text: str) -> tuple[int, str]:
-        retries = max(0, int(os.getenv("AI_AGENT_EDGE_RETRIES", "1")))
+        retries = max(0, int(os.getenv("AI_AGENT_EDGE_RETRIES", "0")))
         last_error: Exception | None = None
         for attempt in range(retries + 1):
             handle = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
@@ -112,18 +110,6 @@ class EdgeTTS(SpeechSynthesizer):
                     time.sleep(0.2)
         raise RuntimeError(f"chunk {index + 1} synthesis failed: {last_error}")
 
-    def _piper_chunk(self, index: int, text: str) -> str:
-        if not piper_available():
-            raise RuntimeError("Piper fallback is not available")
-        if self._piper is None:
-            from .piper_tts_backend import PiperTTS
-            self._piper = PiperTTS()
-        ui.debug(f"[TTS] Edge第 {index + 1} 段失败，仅由Piper补播这一段")
-        filename = self._piper.synthesize_to_file(text)
-        if filename is None:
-            raise RuntimeError(f"Piper fallback failed for chunk {index + 1}")
-        return filename
-
     def _synthesize_and_play(self, text: str) -> None:
         """Play chunk 0 as soon as it is ready while later chunks synthesize."""
         chunks = self._split_text(text)
@@ -141,9 +127,12 @@ class EdgeTTS(SpeechSynthesizer):
                         source = "Edge"
                     except Exception as exc:
                         logger.warning("Edge chunk %d failed: %s", expected + 1, exc)
-                        index = expected
-                        filename = self._piper_chunk(index, chunks[index])
-                        source = "Piper兜底"
+                        # Abort this sentence instead of changing voice in the
+                        # middle. TTSEngine may apply an explicitly configured
+                        # whole-sentence fallback, but never a per-chunk mix.
+                        raise RuntimeError(
+                            f"Edge sentence synthesis failed at chunk {expected + 1}"
+                        ) from exc
                     if self._stopped.is_set():
                         try:
                             os.remove(filename)

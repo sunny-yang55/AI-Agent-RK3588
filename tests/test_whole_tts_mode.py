@@ -12,10 +12,15 @@ sys.path.insert(0, str(ROOT))
 
 
 class WholeTTSModeTests(unittest.TestCase):
-    def test_runtime_defaults_to_whole_answer_mode(self):
+    def test_runtime_defaults_to_whole_answer_mode_for_gapless_playback(self):
         source = (ROOT / "runtime/runtime_manager.py").read_text(encoding="utf-8")
         self.assertIn('AI_AGENT_TTS_MODE", "whole"', source)
         self.assertIn('tts_mode == "sentence"', source)
+
+    def test_user_mode_prints_one_coherent_answer_block(self):
+        source = (ROOT / "runtime/runtime_manager.py").read_text(encoding="utf-8")
+        self.assertIn("ui.assistant(text)", source)
+        self.assertIn("if not ui.USER_MODE", source)
 
     def test_edge_backend_is_interruptible(self):
         source = (ROOT / "speech/tts/edge_tts_backend.py").read_text(encoding="utf-8")
@@ -81,11 +86,14 @@ class WholeTTSModeTests(unittest.TestCase):
         self.assertFalse(engine.speak("测试语音"))
         self.assertEqual(engine.backend.speak.call_count, 1)
 
-    def test_edge_fallback_is_per_chunk_not_whole_answer(self):
+    def test_edge_never_mixes_piper_inside_one_sentence(self):
         source = (ROOT / "speech/tts/edge_tts_backend.py").read_text(encoding="utf-8")
-        self.assertIn("仅由Piper补播这一段", source)
-        self.assertIn("self._piper_chunk(index, chunks[index])", source)
-        self.assertIn("（Piper兜底）", source.replace("{source}", "Piper兜底"))
+        self.assertNotIn("_piper_chunk", source)
+        self.assertIn("Edge sentence synthesis failed", source)
+
+    def test_offline_voice_fallback_is_opt_in(self):
+        source = (ROOT / "speech/tts/tts_engine.py").read_text(encoding="utf-8")
+        self.assertIn('AI_AGENT_TTS_OFFLINE_FALLBACK", "0"', source)
 
     def test_partial_edge_output_is_never_replayed_from_start(self):
         source = (ROOT / "speech/tts/tts_engine.py").read_text(encoding="utf-8")
@@ -159,6 +167,13 @@ class WholeTTSModeTests(unittest.TestCase):
     def test_default_response_token_guard_is_reduced(self):
         adapter = (ROOT / "tools/llm/adapter.py").read_text(encoding="utf-8")
         self.assertIn('AI_AGENT_MAX_RESPONSE_TOKENS", "240"', adapter)
+
+    def test_llm_timeout_and_retry_are_bounded(self):
+        adapter = (ROOT / "tools/llm/adapter.py").read_text(encoding="utf-8")
+        self.assertIn('AI_AGENT_LLM_TIMEOUT", "20"', adapter)
+        self.assertIn('AI_AGENT_LLM_RETRIES", "1"', adapter)
+        self.assertIn("max_retries=0", adapter)
+        self.assertIn("Never replay a stream", adapter)
 
 
 if __name__ == "__main__":

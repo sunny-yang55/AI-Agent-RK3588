@@ -56,6 +56,19 @@ class RuntimeManager:
 
             if not result.success:
 
+                if result.woke:
+                    # Online TTS acknowledgement delays the next microphone
+                    # opening by several seconds. Default to an immediate UI
+                    # acknowledgement; it can still be enabled explicitly.
+                    if os.getenv("AI_AGENT_WAKE_ACK_TTS", "0").lower() in {
+                        "1", "true", "yes"
+                    }:
+                        self.speech.speak("我在，请说。", allow_interrupt=False)
+                    elif ui.USER_MODE:
+                        ui.assistant_start()
+                        print("我在，请说。")
+                    continue
+
                 if result.error:
                     technical_failures += 1
                     ui.debug(
@@ -193,8 +206,8 @@ class RuntimeManager:
             stream_enabled = os.getenv(
                 "AI_AGENT_STREAM_RESPONSE", "1"
             ).strip().lower() not in {"0", "false", "no"}
-            # v1.3.7 defaults to one synthesis/playback per complete answer.
-            # This avoids Edge-TTS network gaps and missing sentence requests.
+            # Start speaking complete semantic sentences while later LLM text
+            # is still arriving. This avoids waiting for the whole answer.
             tts_mode = os.getenv("AI_AGENT_TTS_MODE", "whole").strip().lower()
             stream_tts_enabled = tts_mode == "sentence" and os.getenv(
                 "AI_AGENT_STREAM_TTS", "0"
@@ -209,9 +222,13 @@ class RuntimeManager:
                 nonlocal first_token_s, streamed
                 if not streamed:
                     first_token_s = time.perf_counter() - response_started
-                    ui.assistant_start() if ui.USER_MODE else print("\nAI-Agent:")
+                    if ui.USER_MODE:
+                        ui.state("正在生成回答…", "◌")
+                    else:
+                        print("\nAI-Agent:")
                     streamed = True
-                print(chunk, end="", flush=True)
+                if not ui.USER_MODE:
+                    print(chunk, end="", flush=True)
                 if stream_tts is not None:
                     stream_tts.feed(chunk)
 
@@ -248,7 +265,13 @@ class RuntimeManager:
 
             total_s = time.perf_counter() - response_started
             if streamed:
-                print()
+                if ui.USER_MODE:
+                    ui.assistant(text)
+                    ui.metric(
+                        f"首字 {first_token_s:.2f}s · 完整回答 {total_s:.2f}s · 正在准备语音"
+                    )
+                else:
+                    print()
                 ui.debug(
                     f"[性能] LLM首字: {first_token_s:.2f}s | "
                     f"完整回复: {total_s:.2f}s"
@@ -269,3 +292,5 @@ class RuntimeManager:
                 # Avoid recording the loudspeaker, but only after LLM timing
                 # has been printed. Audio remains ordered on one worker.
                 stream_tts.wait()
+                if ui.USER_MODE:
+                    ui.completed()

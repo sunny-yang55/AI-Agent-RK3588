@@ -41,3 +41,6 @@ requirements-installed.txt
 
 # Exported RKNN runtime binary; shipped with image/release artifact
 vendor/rknn-runtime-site/
+
+# Board-local Zipformer Torch/Kaldifeat runtime
+vendor/zipformer-runtime-site/
