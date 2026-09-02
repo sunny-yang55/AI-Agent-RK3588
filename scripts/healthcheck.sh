@@ -3,6 +3,7 @@ set -euo pipefail
 
 project_root="$(cd "$(dirname "$0")/.." && pwd)"
 python_bin="$project_root/venv/bin/python"
+export PYTHONPATH="$project_root${PYTHONPATH:+:$PYTHONPATH}"
 audio_check=1
 [[ "${1:-}" == "--no-audio" ]] && audio_check=0
 
