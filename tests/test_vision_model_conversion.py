@@ -23,6 +23,11 @@ class VisionModelConversionTests(unittest.TestCase):
         self.assertIn('env_dir="$cache/venv"', source)
         self.assertNotIn('"$root/venv/bin/pip"', source)
 
+    def test_service_diagnostic_bootstraps_project_venv(self):
+        source = (ROOT / "scripts/test_vision_service.py").read_text(encoding="utf-8")
+        self.assertIn("Path(sys.prefix).resolve()", source)
+        self.assertIn("os.execv", source)
+
 
 if __name__ == "__main__":
     unittest.main()

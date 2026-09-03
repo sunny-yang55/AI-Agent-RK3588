@@ -4,12 +4,20 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_VENV = PROJECT_ROOT / "venv"
+PROJECT_PYTHON = PROJECT_VENV / "bin/python"
+if PROJECT_PYTHON.is_file() and Path(sys.prefix).resolve() != PROJECT_VENV.resolve():
+    os.execv(
+        str(PROJECT_PYTHON),
+        [str(PROJECT_PYTHON), str(Path(__file__).resolve()), *sys.argv[1:]],
+    )
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
