@@ -187,8 +187,11 @@ class RKNNYOLOv5Detector:
 
     def detect(self, image: np.ndarray) -> list[YoloDetection]:
         input_image, scale, pad_x, pad_y = self._letterbox(image)
+        # RKNN Toolkit 2.3.2 exports this model with a static four-dimensional
+        # NHWC input. RKNNLite does not add the batch dimension automatically.
+        input_batch = np.expand_dims(input_image, axis=0)
         started = time.perf_counter()
-        outputs = self._rknn.inference(inputs=[input_image])
+        outputs = self._rknn.inference(inputs=[input_batch], data_format=["nhwc"])
         self.last_latency_ms = (time.perf_counter() - started) * 1000
         if outputs is None:
             raise RuntimeError("RKNNLite inference returned no outputs")

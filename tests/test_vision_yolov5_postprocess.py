@@ -55,6 +55,11 @@ class YOLOv5PostprocessTests(unittest.TestCase):
     def test_empty_summary_is_explicit(self):
         self.assertEqual(summarize_detections([]), "当前画面中没有检测到已知物体。")
 
+    def test_detector_adds_static_batch_dimension(self):
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertIn("np.expand_dims(input_image, axis=0)", source)
+        self.assertIn('data_format=["nhwc"]', source)
+
 
 if __name__ == "__main__":
     unittest.main()
