@@ -5,6 +5,7 @@ import time
 from agent import Agent
 from runtime.input_adapter import InputAdapter
 from runtime.streaming_speech import StreamingSpeechPlayer
+from runtime.vision_control import VisionVoiceController
 import voice_ui as ui
 from speech.filter import ConfidenceFilter, NoiseFilter
 from tools.common.context_resolver import ContextResolver
@@ -12,6 +13,7 @@ from tools.common.conversation_memory import ConversationMemory
 from tools.common.entity_resolver import EntityResolver
 from tools.llm.adapter import LLMAdapter
 from tools.speech import SpeechManager
+from tools.vision.process_service import ProcessVisionService
 
 
 class RuntimeManager:
@@ -23,6 +25,11 @@ class RuntimeManager:
         ui.debug("[系统] 初始化语音模块...")
 
         self.speech = SpeechManager()
+
+        self.vision = VisionVoiceController(
+            ProcessVisionService(),
+            self.speech.speak,
+        )
 
         ui.debug("[系统] AI核心加载完成")
 
@@ -103,6 +110,9 @@ class RuntimeManager:
             # ==========================
 
             raw_text = result.text.strip()
+
+            if self.vision.handle(raw_text):
+                continue
 
             # 测试
             # print("[ASR Raw]", repr(raw_text))
@@ -294,3 +304,5 @@ class RuntimeManager:
                 stream_tts.wait()
                 if ui.USER_MODE:
                     ui.completed()
+
+        self.vision.close()

@@ -115,6 +115,9 @@ class WakeWordTests(unittest.TestCase):
     def test_late_stop_is_not_an_llm_request(self):
         self.assertEqual(classify_local_command("小安停止等一下"), "stop")
 
+    def test_vision_stop_is_reserved_for_runtime(self):
+        self.assertIsNone(classify_local_command("小安停止摄像头"))
+
     def test_audio_overlap_text_is_deduplicated(self):
         self.assertEqual(_merge_text("请介绍安徽芜湖", "安徽芜湖的历史"), "请介绍安徽芜湖的历史")
 

@@ -54,6 +54,10 @@ def classify_local_command(text: str, *, require_wake: bool = False) -> str | No
         return None
     if any(item in target for item in EXIT_COMMANDS):
         return "exit"
+    # Visual stop commands are handled by RuntimeManager. Do not consume
+    # “停止摄像头” as a generic request to stop TTS playback.
+    if any(marker in target for marker in ("摄像头", "视觉")):
+        return None
     if any(item in target for item in STOP_COMMANDS):
         return "stop"
     if any(item in target for item in SLEEP_COMMANDS):
