@@ -60,6 +60,13 @@ class YOLOv5PostprocessTests(unittest.TestCase):
         self.assertIn("np.expand_dims(input_image, axis=0)", source)
         self.assertIn('data_format=["nhwc"]', source)
 
+    def test_diagnostic_detects_venv_by_prefix_not_symlink_target(self):
+        script = (MODULE_PATH.parents[2] / "scripts/test_vision_detection.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("Path(sys.prefix).resolve()", script)
+        self.assertNotIn("Path(sys.executable).resolve()", script)
+
 
 if __name__ == "__main__":
     unittest.main()
