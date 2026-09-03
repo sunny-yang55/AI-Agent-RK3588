@@ -18,7 +18,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--duration",
         type=float,
-        default=0.0,
+        default=20.0,
         help="automatically close after this many seconds; 0 means unlimited",
     )
     return parser.parse_args()
@@ -30,9 +30,9 @@ def main() -> int:
         print("[VisionService] --duration must be zero or positive", file=sys.stderr)
         return 2
 
-    from tools.vision.service import VisionService
+    from tools.vision.process_service import ProcessVisionService
 
-    service = VisionService()
+    service = ProcessVisionService()
     if not service.start():
         print(f"[VisionService] Start failed: {service.session.error}", file=sys.stderr)
         return 3
