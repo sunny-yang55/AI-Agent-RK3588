@@ -4,28 +4,74 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import sys
 import time
 from collections import deque
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-import cv2
-
-
-DEFAULT_DEVICE = (
-    "/dev/v4l/by-id/"
-    "usb-Ruision_USB_FHD_Camera_20220623-c6ec643-video-index0"
-)
 WINDOW_NAME = "XiaoAn Vision - Camera Diagnostic"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+class DiagnosticError(RuntimeError):
+    """Raised for diagnostic-only failures outside CameraSource."""
+
+
+@dataclass
+class DiagnosticStats:
+    started_at: float
+    frames: int = 0
+    read_failures: int = 0
+
+    def average_fps(self, now: float) -> float:
+        elapsed = max(0.0, now - self.started_at)
+        if elapsed == 0:
+            return 0.0
+        return self.frames / elapsed
+
+
+def duration_reached(duration: float, started_at: float, now: float) -> bool:
+    return duration > 0 and now - started_at >= duration
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--device", default=DEFAULT_DEVICE)
+    parser.add_argument(
+        "--device",
+        default=(
+            "/dev/v4l/by-id/"
+            "usb-Ruision_USB_FHD_Camera_20220623-c6ec643-video-index0"
+        ),
+    )
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
-    parser.add_argument("--fps", type=float, default=25.0)
+    parser.add_argument("--fps", type=float, default=30.0)
     parser.add_argument("--fourcc", default="MJPG")
+    parser.add_argument(
+        "--duration",
+        type=float,
+        default=0.0,
+        help="stop automatically after this many seconds; 0 means unlimited",
+    )
+    parser.add_argument(
+        "--no-window",
+        action="store_true",
+        help="capture frames without creating a GUI window",
+    )
+    parser.add_argument(
+        "--report-interval",
+        type=float,
+        default=10.0,
+        help="seconds between console progress reports",
+    )
+    parser.add_argument(
+        "--max-consecutive-failures",
+        type=int,
+        default=30,
+    )
     parser.add_argument(
         "--screenshot-dir",
         type=Path,
@@ -34,126 +80,171 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def set_capture_property(
-    capture: cv2.VideoCapture,
-    prop: int,
-    value: float,
-    name: str,
-) -> None:
-    if not capture.set(prop, value):
-        print(f"[Camera] Warning: driver rejected {name}={value}")
+def load_cv2() -> Any:
+    try:
+        return importlib.import_module("cv2")
+    except ModuleNotFoundError as exc:
+        raise DiagnosticError("OpenCV is required for the diagnostic window") from exc
 
 
-def print_negotiated_format(capture: cv2.VideoCapture) -> None:
-    width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = capture.get(cv2.CAP_PROP_FPS)
-    fourcc_value = int(capture.get(cv2.CAP_PROP_FOURCC))
-    fourcc = "".join(chr((fourcc_value >> (8 * index)) & 0xFF) for index in range(4))
-    print(
-        "[Camera] Negotiated: "
-        f"{width}x{height}, {fps:.2f} FPS, FOURCC={fourcc!r}"
-    )
+def load_camera_api() -> Any:
+    """Load board runtime dependencies only when capture actually starts."""
+    project_root = str(PROJECT_ROOT)
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    try:
+        return importlib.import_module("tools.vision.camera")
+    except ModuleNotFoundError as exc:
+        raise DiagnosticError(f"failed to import camera runtime: {exc}") from exc
 
 
-def save_screenshot(frame, directory: Path) -> None:
+def save_screenshot(frame: Any, directory: Path, cv: Any) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     filename = directory / time.strftime("camera-%Y%m%d-%H%M%S.jpg")
-    if not cv2.imwrite(str(filename), frame):
-        raise RuntimeError(f"Failed to save screenshot: {filename}")
+    if not cv.imwrite(str(filename), frame):
+        raise DiagnosticError(f"failed to save screenshot: {filename}")
     print(f"[Camera] Screenshot saved: {filename.resolve()}")
 
 
+def validate_args(args: argparse.Namespace) -> None:
+    if args.duration < 0:
+        raise ValueError("--duration must be zero or positive")
+    if args.report_interval <= 0:
+        raise ValueError("--report-interval must be positive")
+    if args.max_consecutive_failures <= 0:
+        raise ValueError("--max-consecutive-failures must be positive")
+
+
 def run(args: argparse.Namespace) -> int:
-    device = Path(args.device)
-    if not device.exists():
-        print(f"[Camera] Device does not exist: {device}", file=sys.stderr)
-        return 2
-
-    capture = cv2.VideoCapture(str(device), cv2.CAP_V4L2)
-    if not capture.isOpened():
-        print(f"[Camera] Failed to open: {device}", file=sys.stderr)
-        return 3
-
+    validate_args(args)
+    camera_api = load_camera_api()
+    config = camera_api.CameraConfig(
+        device=args.device,
+        width=args.width,
+        height=args.height,
+        fps=args.fps,
+        fourcc=args.fourcc,
+        buffer_size=1,
+    )
+    camera = camera_api.OpenCVCameraSource(config)
+    cv = None if args.no_window else load_cv2()
     window_created = False
-    frame_times: deque[float] = deque(maxlen=60)
+    rolling_times: deque[float] = deque(maxlen=60)
     consecutive_failures = 0
-    frame_count = 0
+    started_at = time.monotonic()
+    stats = DiagnosticStats(started_at=started_at)
+    next_report_at = started_at + args.report_interval
+    exit_reason = "completed"
 
     try:
-        set_capture_property(
-            capture,
-            cv2.CAP_PROP_FOURCC,
-            cv2.VideoWriter_fourcc(*args.fourcc),
-            "FOURCC",
+        camera_format = camera.open()
+        print(
+            "[Camera] Negotiated: "
+            f"{camera_format.width}x{camera_format.height}, "
+            f"{camera_format.fps:.2f} FPS, "
+            f"FOURCC={camera_format.fourcc!r}, "
+            f"backend={camera_format.backend}"
         )
-        set_capture_property(capture, cv2.CAP_PROP_FRAME_WIDTH, args.width, "width")
-        set_capture_property(capture, cv2.CAP_PROP_FRAME_HEIGHT, args.height, "height")
-        set_capture_property(capture, cv2.CAP_PROP_FPS, args.fps, "fps")
-        set_capture_property(capture, cv2.CAP_PROP_BUFFERSIZE, 1, "buffer-size")
-        print_negotiated_format(capture)
 
-        cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
-        window_created = True
-        print("[Camera] Controls: q/Esc=quit, s=save screenshot")
+        if cv is not None:
+            cv.namedWindow(WINDOW_NAME, cv.WINDOW_NORMAL)
+            window_created = True
+            print("[Camera] Controls: q/Esc=quit, s=save screenshot")
+        else:
+            print("[Camera] Headless capture mode enabled")
 
         while True:
-            ok, frame = capture.read()
             now = time.monotonic()
-            if not ok or frame is None:
+            if duration_reached(args.duration, started_at, now):
+                exit_reason = "duration reached"
+                break
+
+            try:
+                camera_frame = camera.read()
+            except camera_api.CameraReadError as exc:
+                stats.read_failures += 1
                 consecutive_failures += 1
                 print(
-                    f"[Camera] Frame read failed ({consecutive_failures}/30)",
+                    "[Camera] Frame read failed "
+                    f"({consecutive_failures}/{args.max_consecutive_failures}): {exc}",
                     file=sys.stderr,
                 )
-                if consecutive_failures >= 30:
-                    raise RuntimeError("Camera failed for 30 consecutive frames")
+                if consecutive_failures >= args.max_consecutive_failures:
+                    raise
                 time.sleep(0.02)
                 continue
 
             consecutive_failures = 0
-            frame_count += 1
-            frame_times.append(now)
-            measured_fps = 0.0
-            if len(frame_times) >= 2:
-                elapsed = frame_times[-1] - frame_times[0]
-                if elapsed > 0:
-                    measured_fps = (len(frame_times) - 1) / elapsed
+            stats.frames += 1
+            frame = camera_frame.image
+            now = camera_frame.monotonic_at
+            rolling_times.append(now)
+
+            rolling_fps = 0.0
+            if len(rolling_times) >= 2:
+                rolling_elapsed = rolling_times[-1] - rolling_times[0]
+                if rolling_elapsed > 0:
+                    rolling_fps = (len(rolling_times) - 1) / rolling_elapsed
+
+            if now >= next_report_at:
+                print(
+                    f"[Camera] frames={stats.frames}, "
+                    f"fps={stats.average_fps(now):.2f}, "
+                    f"read_failures={stats.read_failures}"
+                )
+                next_report_at = now + args.report_interval
+
+            if cv is None:
+                continue
 
             overlay = (
-                f"Frame {frame_count} | {frame.shape[1]}x{frame.shape[0]} "
-                f"| {measured_fps:.1f} FPS"
+                f"Frame {camera_frame.sequence} | "
+                f"{frame.shape[1]}x{frame.shape[0]} | {rolling_fps:.1f} FPS"
             )
-            cv2.putText(
+            cv.putText(
                 frame,
                 overlay,
                 (20, 38),
-                cv2.FONT_HERSHEY_SIMPLEX,
+                cv.FONT_HERSHEY_SIMPLEX,
                 0.8,
                 (0, 255, 0),
                 2,
-                cv2.LINE_AA,
+                cv.LINE_AA,
             )
-            cv2.imshow(WINDOW_NAME, frame)
+            cv.imshow(WINDOW_NAME, frame)
 
-            key = cv2.waitKey(1) & 0xFF
+            key = cv.waitKey(1) & 0xFF
             if key in (ord("q"), ord("Q"), 27):
-                print("[Camera] Quit requested from window")
+                exit_reason = "window key"
                 break
             if key in (ord("s"), ord("S")):
-                save_screenshot(frame, args.screenshot_dir)
+                save_screenshot(frame, args.screenshot_dir, cv)
 
-            if cv2.getWindowProperty(WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
-                print("[Camera] Window close requested")
+            if cv.getWindowProperty(WINDOW_NAME, cv.WND_PROP_VISIBLE) < 1:
+                exit_reason = "window closed"
                 break
 
     except KeyboardInterrupt:
+        exit_reason = "Ctrl+C"
         print("\n[Camera] Ctrl+C received")
+    except (camera_api.CameraError, DiagnosticError) as exc:
+        exit_reason = f"camera error: {exc}"
+        print(f"[Camera] Error: {exc}", file=sys.stderr)
+        return 3
     finally:
-        capture.release()
-        if window_created:
-            cv2.destroyAllWindows()
-            cv2.waitKey(1)
+        camera.close()
+        if window_created and cv is not None:
+            cv.destroyAllWindows()
+            cv.waitKey(1)
+        finished_at = time.monotonic()
+        print(
+            "[Camera] Summary: "
+            f"reason={exit_reason}, "
+            f"elapsed={finished_at - started_at:.2f}s, "
+            f"frames={stats.frames}, "
+            f"fps={stats.average_fps(finished_at):.2f}, "
+            f"read_failures={stats.read_failures}"
+        )
         print("[Camera] Capture released; windows destroyed")
 
     return 0
@@ -161,10 +252,14 @@ def run(args: argparse.Namespace) -> int:
 
 def main() -> int:
     args = parse_args()
-    if len(args.fourcc) != 4:
-        print("[Camera] --fourcc must contain exactly four characters", file=sys.stderr)
+    try:
+        return run(args)
+    except ValueError as exc:
+        print(f"[Camera] Invalid argument: {exc}", file=sys.stderr)
         return 2
-    return run(args)
+    except DiagnosticError as exc:
+        print(f"[Camera] Error: {exc}", file=sys.stderr)
+        return 3
 
 
 if __name__ == "__main__":
