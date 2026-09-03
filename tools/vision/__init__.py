@@ -13,6 +13,7 @@ from .session import (
     VisionSessionState,
     classify_vision_command,
 )
+from .service import OpenCVVisionWindow, VisionService
 from .tool import VisionTool
 
 
@@ -34,5 +35,7 @@ __all__ = [
     "VisionSession",
     "VisionSessionState",
     "classify_vision_command",
+    "OpenCVVisionWindow",
+    "VisionService",
     "VisionTool",
 ]
