@@ -50,6 +50,16 @@ _DESCRIBE_PHRASES = (
     "识别一下",
     "看下前面",
 )
+_ACTIVE_VISUAL_FOLLOWUPS = (
+    "看到了吗",
+    "看到吗",
+    "看见了吗",
+    "看见吗",
+    "有没有看到",
+    "有没有看见",
+    "能看到吗",
+    "能看见吗",
+)
 
 
 def _normalize(text: str) -> str:
@@ -67,6 +77,8 @@ def classify_vision_command(
     if any(phrase in clean for phrase in _CLOSE_PHRASES):
         return VisionCommand.CLOSE
     if any(phrase in clean for phrase in _DESCRIBE_PHRASES):
+        return VisionCommand.DESCRIBE
+    if active and any(phrase in clean for phrase in _ACTIVE_VISUAL_FOLLOWUPS):
         return VisionCommand.DESCRIBE
     if clean in {"看", "看看"} or any(phrase in clean for phrase in _OPEN_PHRASES):
         return VisionCommand.OPEN

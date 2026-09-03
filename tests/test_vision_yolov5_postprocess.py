@@ -52,6 +52,13 @@ class YOLOv5PostprocessTests(unittest.TestCase):
         ]
         self.assertEqual(summarize_detections(detections), "我看到2个人、1个瓶子。")
 
+    def test_summary_uses_natural_chinese_measure_words(self):
+        detections = [
+            YoloDetection(63, "laptop", "笔记本电脑", 0.9, (0, 0, 10, 10)),
+            YoloDetection(73, "book", "书", 0.8, (0, 0, 10, 10)),
+        ]
+        self.assertEqual(summarize_detections(detections), "我看到1台笔记本电脑、1本书。")
+
     def test_empty_summary_is_explicit(self):
         self.assertEqual(summarize_detections([]), "当前画面中没有检测到已知物体。")
 

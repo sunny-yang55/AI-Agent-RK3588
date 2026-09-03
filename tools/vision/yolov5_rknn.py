@@ -42,6 +42,13 @@ COCO_ZH = {
     "book": "书", "clock": "时钟", "vase": "花瓶", "scissors": "剪刀",
 }
 
+MEASURE_WORDS = {
+    "人": "个", "自行车": "辆", "汽车": "辆", "摩托车": "辆",
+    "飞机": "架", "公交车": "辆", "火车": "列", "卡车": "辆", "船": "艘",
+    "雨伞": "把", "椅子": "把", "电视": "台", "笔记本电脑": "台",
+    "键盘": "个", "鼠标": "个", "手机": "部", "书": "本", "剪刀": "把",
+}
+
 ANCHORS = np.asarray(
     (
         ((10, 13), (16, 30), (33, 23)),
@@ -233,7 +240,10 @@ def summarize_detections(
     counts: dict[str, int] = {}
     for detection in spoken:
         counts[detection.label_zh] = counts.get(detection.label_zh, 0) + 1
-    parts = [f"{count}个{label}" for label, count in counts.items()]
+    parts = [
+        f"{count}{MEASURE_WORDS.get(label, '个')}{label}"
+        for label, count in counts.items()
+    ]
     return "我看到" + "、".join(parts) + "。"
 
 
