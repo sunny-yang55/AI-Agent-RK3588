@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import multiprocessing
+import time
 from collections.abc import Callable
 from multiprocessing.connection import Connection
+from typing import Any
 
 from .camera import CameraConfig, CameraFormat, CameraSource, OpenCVCameraSource
 from .service import OpenCVVisionWindow, VisionDisplay
@@ -14,16 +16,28 @@ from .session import VisionSession, VisionSessionState
 def _vision_process_main(
     connection: Connection,
     config: CameraConfig,
+    detection_enabled: bool = False,
+    detection_interval: int = 5,
     camera_factory: Callable[[], CameraSource] | None = None,
     display_factory: Callable[[], VisionDisplay] | None = None,
+    detector_factory: Callable[[], Any] | None = None,
 ) -> None:
     """Run camera and HighGUI together on the child process main thread."""
     camera = None
     display = None
+    detector = None
+    latest_detections = []
     failed = False
     try:
         camera = camera_factory() if camera_factory else OpenCVCameraSource(config)
         display = display_factory() if display_factory else OpenCVVisionWindow()
+        if detection_enabled:
+            if detector_factory is not None:
+                detector = detector_factory()
+            else:
+                from .yolov5_rknn import RKNNYOLOv5Detector
+
+                detector = RKNNYOLOv5Detector()
         camera_format = camera.open()
         connection.send(
             {
@@ -38,10 +52,34 @@ def _vision_process_main(
             }
         )
         while True:
-            if connection.poll() and connection.recv().get("command") == "stop":
-                break
             frame = camera.read()
-            if not display.show(frame.image, sequence=frame.sequence):
+            display_image = frame.image
+            if detector is not None and (
+                frame.sequence == 1 or frame.sequence % max(1, detection_interval) == 0
+            ):
+                latest_detections = detector.detect(frame.image)
+            stop_requested = False
+            while connection.poll():
+                message = connection.recv()
+                command = message.get("command")
+                if command == "stop":
+                    stop_requested = True
+                    break
+                if command == "describe":
+                    from .yolov5_rknn import summarize_detections
+
+                    connection.send(
+                        {
+                            "event": "description",
+                            "summary": summarize_detections(latest_detections),
+                            "detections": [item.__dict__ for item in latest_detections],
+                        }
+                    )
+            if detector is not None:
+                from .yolov5_rknn import draw_detections
+
+                display_image = draw_detections(frame.image, latest_detections)
+            if stop_requested or not display.show(display_image, sequence=frame.sequence):
                 break
     except (EOFError, BrokenPipeError):
         pass
@@ -70,6 +108,15 @@ def _vision_process_main(
                     connection.send({"event": "error", "error": str(exc)})
                 except (EOFError, BrokenPipeError, OSError):
                     pass
+        if detector is not None:
+            try:
+                detector.close()
+            except Exception as exc:
+                failed = True
+                try:
+                    connection.send({"event": "error", "error": str(exc)})
+                except (EOFError, BrokenPipeError, OSError):
+                    pass
         if not failed:
             try:
                 connection.send({"event": "closed"})
@@ -87,10 +134,14 @@ class ProcessVisionService:
         *,
         session: VisionSession | None = None,
         process_context=None,
+        detection_enabled: bool = True,
+        detection_interval: int = 5,
     ) -> None:
         self.config = config or CameraConfig()
         self.session = session or VisionSession()
         self._context = process_context or multiprocessing.get_context("spawn")
+        self.detection_enabled = detection_enabled
+        self.detection_interval = max(1, detection_interval)
         self._process = None
         self._connection = None
         self._camera_format: CameraFormat | None = None
@@ -112,7 +163,12 @@ class ProcessVisionService:
         self._connection = parent
         self._process = self._context.Process(
             target=_vision_process_main,
-            args=(child, self.config),
+            args=(
+                child,
+                self.config,
+                self.detection_enabled,
+                self.detection_interval,
+            ),
             name="vision-preview",
             daemon=True,
         )
@@ -149,6 +205,22 @@ class ProcessVisionService:
         if connection is not None:
             connection.close()
         return self.session.state is VisionSessionState.CLOSED
+
+    def describe(self, *, timeout: float = 3.0) -> str:
+        """Request the latest stable detection summary from the child."""
+        if not self.is_running or self._connection is None:
+            raise RuntimeError("vision service is not running")
+        self._connection.send({"command": "describe"})
+        deadline = time.monotonic() + max(0.0, timeout)
+        while time.monotonic() < deadline:
+            remaining = deadline - time.monotonic()
+            if not self._connection.poll(remaining):
+                break
+            message = self._connection.recv()
+            if message.get("event") == "description":
+                return str(message["summary"])
+            self._handle_message(message)
+        raise TimeoutError("vision description timed out")
 
     def _refresh(self) -> None:
         connection = self._connection

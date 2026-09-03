@@ -39,6 +39,7 @@ class FakeService:
         self.starts = 0
         self.stops = 0
         self.session = SimpleNamespace(error=None)
+        self.description = "我看到1个人。"
 
     @property
     def is_running(self):
@@ -53,6 +54,9 @@ class FakeService:
         self.stops += 1
         self.running = False
         return self.stop_result
+
+    def describe(self):
+        return self.description
 
 
 class VisionVoiceControllerTests(unittest.TestCase):
@@ -92,12 +96,29 @@ class VisionVoiceControllerTests(unittest.TestCase):
         self.assertTrue(controller.handle("打开摄像头"))
         self.assertIn("camera busy", spoken[0][0])
 
+    def test_visual_question_speaks_latest_description(self):
+        service = FakeService(running=True)
+        controller, spoken = self.make_controller(service)
+        self.assertTrue(controller.handle("前面有什么"))
+        self.assertEqual(spoken[0][0], "我看到1个人。")
+
+    def test_visual_question_starts_camera_when_closed(self):
+        service = FakeService()
+        controller, spoken = self.make_controller(service)
+        self.assertTrue(controller.handle("这是什么"))
+        self.assertEqual(service.starts, 1)
+        self.assertEqual(spoken[0][0], "我看到1个人。")
+
     def test_runtime_close_is_silent(self):
         service = FakeService(running=True)
         controller, spoken = self.make_controller(service)
         controller.close()
         self.assertEqual(service.stops, 1)
         self.assertEqual(spoken, [])
+
+    def test_legacy_yolo_registration_is_opt_in(self):
+        source = (ROOT / "tools/loader.py").read_text(encoding="utf-8")
+        self.assertIn('AI_AGENT_LEGACY_VISION_TOOL", "0"', source)
 
 
 if __name__ == "__main__":

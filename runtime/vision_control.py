@@ -30,6 +30,18 @@ class VisionVoiceController:
                 self._speak(f"摄像头打开失败：{reason}", allow_interrupt=False)
             return True
 
+        if command is VisionCommand.DESCRIBE:
+            if not was_running and not self.service.start():
+                reason = self.service.session.error or "未知错误"
+                self._speak(f"摄像头打开失败：{reason}", allow_interrupt=False)
+                return True
+            try:
+                message = self.service.describe()
+            except Exception as exc:
+                message = f"视觉识别失败：{exc}"
+            self._speak(message, allow_interrupt=False)
+            return True
+
         if was_running:
             stopped = self.service.stop()
             message = "摄像头已关闭。" if stopped else "摄像头关闭失败，请检查设备。"

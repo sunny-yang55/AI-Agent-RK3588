@@ -222,11 +222,37 @@ class RKNNYOLOv5Detector:
             self._rknn = None
 
 
-def summarize_detections(detections: list[YoloDetection]) -> str:
-    if not detections:
+def summarize_detections(
+    detections: list[YoloDetection],
+    *,
+    minimum_confidence: float = 0.40,
+) -> str:
+    spoken = [item for item in detections if item.confidence >= minimum_confidence]
+    if not spoken:
         return "当前画面中没有检测到已知物体。"
     counts: dict[str, int] = {}
-    for detection in detections:
+    for detection in spoken:
         counts[detection.label_zh] = counts.get(detection.label_zh, 0) + 1
     parts = [f"{count}个{label}" for label, count in counts.items()]
     return "我看到" + "、".join(parts) + "。"
+
+
+def draw_detections(image: np.ndarray, detections: list[YoloDetection]) -> np.ndarray:
+    """Draw the latest detections without modifying the captured frame."""
+    import cv2
+
+    annotated = image.copy()
+    for item in detections:
+        x1, y1, x2, y2 = item.box
+        cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.putText(
+            annotated,
+            f"{item.label} {item.confidence:.2f}",
+            (x1, max(20, y1 - 6)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 255, 0),
+            2,
+            cv2.LINE_AA,
+        )
+    return annotated

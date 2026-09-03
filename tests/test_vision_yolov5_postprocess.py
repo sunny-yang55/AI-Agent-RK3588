@@ -55,6 +55,13 @@ class YOLOv5PostprocessTests(unittest.TestCase):
     def test_empty_summary_is_explicit(self):
         self.assertEqual(summarize_detections([]), "当前画面中没有检测到已知物体。")
 
+    def test_summary_filters_low_confidence_candidates(self):
+        detections = [
+            YoloDetection(0, "person", "人", 0.39, (0, 0, 10, 10)),
+            YoloDetection(39, "bottle", "瓶子", 0.75, (0, 0, 10, 10)),
+        ]
+        self.assertEqual(summarize_detections(detections), "我看到1个瓶子。")
+
     def test_detector_adds_static_batch_dimension(self):
         source = MODULE_PATH.read_text(encoding="utf-8")
         self.assertIn("np.expand_dims(input_image, axis=0)", source)

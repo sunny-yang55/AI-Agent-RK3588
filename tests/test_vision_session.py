@@ -30,6 +30,10 @@ class VisionCommandTests(unittest.TestCase):
             VisionCommand.CLOSE,
         )
 
+    def test_visual_question_is_describe_command(self):
+        for phrase in ("前面有什么", "你看到了什么", "这是什么", "看下前面"):
+            self.assertEqual(classify_vision_command(phrase), VisionCommand.DESCRIBE)
+
     def test_ambiguous_look_does_not_open(self):
         for phrase in ("我看这件事可以", "查看天气", "看起来不错"):
             self.assertIsNone(classify_vision_command(phrase), phrase)

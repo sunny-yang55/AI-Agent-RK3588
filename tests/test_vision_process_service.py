@@ -40,15 +40,19 @@ run_child = process_module._vision_process_main
 
 
 class FakeConnection:
-    def __init__(self):
+    def __init__(self, incoming=None):
         self.sent = []
+        self.incoming = list(incoming or [])
         self.closed = False
 
     def send(self, message):
         self.sent.append(message)
 
     def poll(self, timeout=0):
-        return False
+        return bool(self.incoming)
+
+    def recv(self):
+        return self.incoming.pop(0)
 
     def close(self):
         self.closed = True
@@ -84,6 +88,32 @@ class ClosingDisplay:
         self.closed = True
 
 
+class FakeDetector:
+    def __init__(self):
+        process = sys.modules[f"{PACKAGE.__name__}.yolov5_rknn"]
+        self.result = [process.YoloDetection(0, "person", "人", 0.9, (0, 0, 10, 10))]
+        self.closed = False
+
+    def detect(self, image):
+        return self.result
+
+    def close(self):
+        self.closed = True
+
+
+class DetectionCamera(FakeCamera):
+    def read(self):
+        import numpy as np
+
+        self.sequence += 1
+        return CameraFrame(
+            self.sequence,
+            time.time(),
+            time.monotonic(),
+            np.zeros((32, 32, 3), dtype=np.uint8),
+        )
+
+
 class VisionProcessChildTests(unittest.TestCase):
     def test_child_reports_active_then_closed_and_releases(self):
         connection, camera, display = FakeConnection(), FakeCamera(), ClosingDisplay()
@@ -109,6 +139,22 @@ class VisionProcessChildTests(unittest.TestCase):
         )
         self.assertEqual(connection.sent, [{"event": "error", "error": "camera busy"}])
         self.assertTrue(camera.closed)
+
+    def test_child_returns_latest_chinese_description(self):
+        load_module("yolov5_rknn")
+        connection = FakeConnection([{"command": "describe"}])
+        camera, display, detector = DetectionCamera(), ClosingDisplay(), FakeDetector()
+        run_child(
+            connection,
+            CameraConfig(),
+            detection_enabled=True,
+            camera_factory=lambda: camera,
+            display_factory=lambda: display,
+            detector_factory=lambda: detector,
+        )
+        descriptions = [item for item in connection.sent if item["event"] == "description"]
+        self.assertEqual(descriptions[0]["summary"], "我看到1个人。")
+        self.assertTrue(detector.closed)
 
 
 class VisionProcessParentTests(unittest.TestCase):

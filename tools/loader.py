@@ -3,6 +3,7 @@ Automatic Tool Discovery
 """
 
 import importlib
+import os
 import pkgutil
 
 from tools.common.tool import TOOL_REGISTRY
@@ -25,6 +26,11 @@ def load_tools():
 
             # 自动注册 Vision Tool
             if name.endswith("tools.vision.register"):
+
+                if os.getenv("AI_AGENT_LEGACY_VISION_TOOL", "0").lower() not in {
+                    "1", "true", "yes"
+                }:
+                    continue
 
                 from tools.vision.register import register_vision_tool
 

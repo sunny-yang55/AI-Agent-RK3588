@@ -10,6 +10,7 @@ from enum import Enum
 class VisionCommand(str, Enum):
     OPEN = "open"
     CLOSE = "close"
+    DESCRIBE = "describe"
 
 
 class VisionSessionState(str, Enum):
@@ -40,6 +41,15 @@ _OPEN_PHRASES = (
     "帮我看",
     "你看看",
 )
+_DESCRIBE_PHRASES = (
+    "前面有什么",
+    "画面里有什么",
+    "看到了什么",
+    "看到什么",
+    "这是什么",
+    "识别一下",
+    "看下前面",
+)
 
 
 def _normalize(text: str) -> str:
@@ -56,6 +66,8 @@ def classify_vision_command(
     clean = _normalize(text).replace("小安", "")
     if any(phrase in clean for phrase in _CLOSE_PHRASES):
         return VisionCommand.CLOSE
+    if any(phrase in clean for phrase in _DESCRIBE_PHRASES):
+        return VisionCommand.DESCRIBE
     if clean in {"看", "看看"} or any(phrase in clean for phrase in _OPEN_PHRASES):
         return VisionCommand.OPEN
     if active and clean in {"关掉", "关闭", "结束", "停下"}:
