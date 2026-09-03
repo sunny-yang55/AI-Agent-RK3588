@@ -7,6 +7,12 @@ backends (for example Ultralytics/PyTorch) are not installed on RK3588.
 from .factory import VisionFactory
 from .manager import VisionPipelineManager
 from .register import register_vision_tool
+from .session import (
+    VisionCommand,
+    VisionSession,
+    VisionSessionState,
+    classify_vision_command,
+)
 from .tool import VisionTool
 
 
@@ -24,5 +30,9 @@ __all__ = [
     "VisionFactory",
     "VisionPipelineManager",
     "register_vision_tool",
+    "VisionCommand",
+    "VisionSession",
+    "VisionSessionState",
+    "classify_vision_command",
     "VisionTool",
 ]
