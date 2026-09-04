@@ -40,16 +40,17 @@ run_child = process_module._vision_process_main
 
 
 class FakeConnection:
-    def __init__(self, incoming=None):
+    def __init__(self, incoming=None, *, wait_for_send=False):
         self.sent = []
         self.incoming = list(incoming or [])
         self.closed = False
+        self.wait_for_send = wait_for_send
 
     def send(self, message):
         self.sent.append(message)
 
     def poll(self, timeout=0):
-        return bool(self.incoming)
+        return bool(self.incoming) and (not self.wait_for_send or bool(self.sent))
 
     def recv(self):
         return self.incoming.pop(0)
@@ -158,6 +159,21 @@ class VisionProcessChildTests(unittest.TestCase):
 
 
 class VisionProcessParentTests(unittest.TestCase):
+    def test_locate_workbench_returns_structured_objects(self):
+        service = ProcessVisionService()
+        service._process = type("Process", (), {"is_alive": lambda self: True})()
+        service.session.request_start()
+        service.session.mark_active()
+        service._connection = FakeConnection(
+            [{"event": "workbench_objects", "objects": [{"color": "green"}]}],
+            wait_for_send=True,
+        )
+        self.assertEqual(service.locate_workbench(), [{"color": "green"}])
+        self.assertEqual(
+            service._connection.sent,
+            [{"command": "locate_workbench"}],
+        )
+
     def test_active_message_updates_format_and_state(self):
         service = ProcessVisionService()
         service.session.request_start()

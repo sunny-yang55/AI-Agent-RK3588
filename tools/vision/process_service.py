@@ -7,6 +7,7 @@ import time
 from collections.abc import Callable
 from multiprocessing.connection import Connection
 from typing import Any
+from pathlib import Path
 
 from .camera import CameraConfig, CameraFormat, CameraSource, OpenCVCameraSource
 from .service import OpenCVVisionWindow, VisionDisplay
@@ -29,6 +30,9 @@ def _vision_process_main(
     latest_detections = []
     stable_detections = []
     stabilizer = None
+    workbench_detector = None
+    workbench_roi = None
+    workbench_detections = []
     failed = False
     try:
         camera = camera_factory() if camera_factory else OpenCVCameraSource(config)
@@ -44,6 +48,12 @@ def _vision_process_main(
 
                 detector = RKNNYOLOv5Detector()
         camera_format = camera.open()
+        if detection_enabled:
+            from .workbench import ColorBlockDetector, load_workbench_roi
+
+            roi_path = Path(__file__).resolve().parents[2] / "config/workbench_roi.json"
+            workbench_roi = load_workbench_roi(roi_path)
+            workbench_detector = ColorBlockDetector(workbench_roi)
         connection.send(
             {
                 "event": "active",
@@ -59,6 +69,8 @@ def _vision_process_main(
         while True:
             frame = camera.read()
             display_image = frame.image
+            if workbench_detector is not None:
+                workbench_detections = workbench_detector.detect(frame.image)
             if detector is not None and (
                 frame.sequence == 1 or frame.sequence % max(1, detection_interval) == 0
             ):
@@ -73,20 +85,44 @@ def _vision_process_main(
                     break
                 if command == "describe":
                     from .yolov5_rknn import answer_visual_query
+                    from .workbench import is_workbench_query, summarize_colored_blocks
+
+                    query = str(message.get("query", ""))
+                    if is_workbench_query(query):
+                        summary = summarize_colored_blocks(workbench_detections)
+                    else:
+                        summary = answer_visual_query(query, stable_detections)
 
                     connection.send(
                         {
                             "event": "description",
-                            "summary": answer_visual_query(
-                                str(message.get("query", "")), stable_detections
-                            ),
+                            "summary": summary,
                             "detections": [item.__dict__ for item in stable_detections],
+                            "workbench_objects": [
+                                item.__dict__ for item in workbench_detections
+                            ],
+                        }
+                    )
+                if command == "locate_workbench":
+                    connection.send(
+                        {
+                            "event": "workbench_objects",
+                            "objects": [item.__dict__ for item in workbench_detections],
                         }
                     )
             if detector is not None:
                 from .yolov5_rknn import draw_detections
 
                 display_image = draw_detections(frame.image, latest_detections)
+            if workbench_detector is not None:
+                from .workbench import WorkbenchROI, draw_workbench_detections
+
+                display_roi = workbench_roi or WorkbenchROI(
+                    0, 0, frame.image.shape[1], frame.image.shape[0]
+                )
+                display_image = draw_workbench_detections(
+                    display_image, display_roi, workbench_detections
+                )
             if stop_requested or not display.show(display_image, sequence=frame.sequence):
                 break
     except (EOFError, BrokenPipeError):
@@ -229,6 +265,22 @@ class ProcessVisionService:
                 return str(message["summary"])
             self._handle_message(message)
         raise TimeoutError("vision description timed out")
+
+    def locate_workbench(self, *, timeout: float = 3.0) -> list[dict]:
+        """Return structured pixel-space objects for robot integration."""
+        if not self.is_running or self._connection is None:
+            raise RuntimeError("vision service is not running")
+        self._connection.send({"command": "locate_workbench"})
+        deadline = time.monotonic() + max(0.0, timeout)
+        while time.monotonic() < deadline:
+            remaining = deadline - time.monotonic()
+            if not self._connection.poll(remaining):
+                break
+            message = self._connection.recv()
+            if message.get("event") == "workbench_objects":
+                return list(message.get("objects", []))
+            self._handle_message(message)
+        raise TimeoutError("workbench location timed out")
 
     def _refresh(self) -> None:
         connection = self._connection

@@ -14,8 +14,9 @@ COLOR_RANGES = {
     "red": (((0, 80, 60), (10, 255, 255)), ((170, 80, 60), (180, 255, 255))),
     "yellow": (((18, 80, 60), (38, 255, 255)),),
     "blue": (((90, 80, 50), (135, 255, 255)),),
+    "green": (((38, 60, 45), (90, 255, 255)),),
 }
-COLOR_ZH = {"red": "红色", "yellow": "黄色", "blue": "蓝色"}
+COLOR_ZH = {"red": "红色", "yellow": "黄色", "blue": "蓝色", "green": "绿色"}
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,8 @@ class WorkbenchROI:
 class ColoredBlockDetection:
     color: str
     color_zh: str
+    shape: str
+    shape_zh: str
     center_pixel: tuple[int, int]
     center_roi: tuple[int, int]
     box: tuple[int, int, int, int]
@@ -91,11 +94,25 @@ class ColorBlockDetector:
                 if width < height:
                     angle += 90.0
                 x, y, w, h = cv2.boundingRect(contour)
+                perimeter = float(cv2.arcLength(contour, True))
+                vertices = len(cv2.approxPolyDP(contour, 0.04 * perimeter, True))
+                circularity = (
+                    4.0 * np.pi * area / (perimeter * perimeter)
+                    if perimeter > 0 else 0.0
+                )
+                if vertices == 3:
+                    shape, shape_zh = "triangular_pyramid", "三棱锥"
+                elif circularity >= 0.84:
+                    shape, shape_zh = "cylinder", "圆柱体"
+                else:
+                    shape, shape_zh = "cube", "正方体"
                 rectangle_area = max(1.0, float(width * height))
                 detections.append(
                     ColoredBlockDetection(
                         color=color,
                         color_zh=COLOR_ZH[color],
+                        shape=shape,
+                        shape_zh=shape_zh,
                         center_pixel=(round(cx + roi.x), round(cy + roi.y)),
                         center_roi=(round(cx), round(cy)),
                         box=(x + roi.x, y + roi.y, x + w + roi.x, y + h + roi.y),
@@ -112,9 +129,20 @@ def summarize_colored_blocks(detections: list[ColoredBlockDetection]) -> str:
         return "工作台上暂时没有检测到彩色物块。"
     counts = {}
     for item in detections:
-        counts[item.color_zh] = counts.get(item.color_zh, 0) + 1
-    parts = [f"{count}个{color}物块" for color, count in counts.items()]
+        key = (item.color_zh, item.shape_zh)
+        counts[key] = counts.get(key, 0) + 1
+    parts = [
+        f"{count}个{color}{shape}"
+        for (color, shape), count in counts.items()
+    ]
     return "我在工作台上看到" + "、".join(parts) + "。"
+
+
+def is_workbench_query(text: str) -> bool:
+    return any(
+        phrase in text
+        for phrase in ("工作台", "桌面", "物块", "方块", "正方体", "圆柱", "三棱锥", "红色", "黄色", "蓝色", "绿色")
+    )
 
 
 def draw_workbench_detections(
@@ -128,12 +156,17 @@ def draw_workbench_detections(
     clipped = roi.clipped(image)
     cv2.rectangle(output, (clipped.x, clipped.y),
                   (clipped.x + clipped.width, clipped.y + clipped.height), (255, 255, 0), 2)
-    colors = {"red": (0, 0, 255), "yellow": (0, 255, 255), "blue": (255, 0, 0)}
+    colors = {
+        "red": (0, 0, 255),
+        "yellow": (0, 255, 255),
+        "blue": (255, 0, 0),
+        "green": (0, 180, 0),
+    }
     for item in detections:
         x1, y1, x2, y2 = item.box
         color = colors[item.color]
         cv2.rectangle(output, (x1, y1), (x2, y2), color, 2)
         cv2.circle(output, item.center_pixel, 5, color, -1)
-        cv2.putText(output, f"{item.color} {item.center_pixel}", (x1, max(20, y1 - 6)),
+        cv2.putText(output, f"{item.color} {item.shape} {item.center_pixel}", (x1, max(20, y1 - 6)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2, cv2.LINE_AA)
     return output
