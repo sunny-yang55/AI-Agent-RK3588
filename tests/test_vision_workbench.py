@@ -53,7 +53,7 @@ class WorkbenchVisionTests(unittest.TestCase):
         cv2.rectangle(image, (20, 20), (70, 70), (0, 0, 255), -1)
         cv2.rectangle(image, (100, 20), (150, 70), (0, 0, 255), -1)
         summary = summarize_colored_blocks(ColorBlockDetector().detect(image))
-        self.assertEqual(summary, "我在工作台上看到2个红色正方体。")
+        self.assertEqual(summary, "我在工作台上看到2个红色物块。")
 
     def test_classifies_top_view_circle_and_triangle(self):
         image = np.full((250, 400, 3), 255, dtype=np.uint8)
@@ -77,11 +77,11 @@ class WorkbenchVisionTests(unittest.TestCase):
         detections = ColorBlockDetector().detect(image)
         self.assertEqual(
             answer_workbench_query("有没有绿色物块", detections),
-            "看到1个绿色圆柱体。",
+            "看到1个绿色物块。",
         )
         self.assertEqual(
             answer_workbench_query("有没有红色三棱锥", detections),
-            "暂时没有看到红色三棱锥。",
+            "看到了红色物块，但目前还不能可靠确认它的形状。",
         )
 
     def test_stable_snapshot_ignores_one_frame_shape_flip(self):
@@ -92,7 +92,7 @@ class WorkbenchVisionTests(unittest.TestCase):
         cv2.circle(circle, (70, 70), 30, (0, 255, 0), -1)
         cylinder = ColorBlockDetector().detect(circle)
         stable = select_stable_workbench_snapshot([cube, cube, cylinder])
-        self.assertEqual(stable[0].shape, "cube")
+        self.assertEqual(stable[0].color, "green")
 
 
 if __name__ == "__main__":

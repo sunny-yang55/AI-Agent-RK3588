@@ -31,9 +31,11 @@ class VisionVoiceController:
             return True
 
         if command is VisionCommand.DESCRIBE:
-            if not was_running and not self.service.start():
-                reason = self.service.session.error or "未知错误"
-                self._speak(f"摄像头打开失败：{reason}", allow_interrupt=True)
+            if not was_running:
+                self._speak(
+                    "摄像头尚未打开，请先说打开摄像头。",
+                    allow_interrupt=True,
+                )
                 return True
             try:
                 message = self.service.describe(text)

@@ -107,12 +107,13 @@ class VisionVoiceControllerTests(unittest.TestCase):
         self.assertEqual(service.query, "前面有什么")
         self.assertTrue(spoken[0][1]["allow_interrupt"])
 
-    def test_visual_question_does_not_start_camera_when_closed(self):
+    def test_visual_question_prompts_for_explicit_open_when_closed(self):
         service = FakeService()
         controller, spoken = self.make_controller(service)
-        self.assertFalse(controller.handle("这是什么"))
+        self.assertTrue(controller.handle("这是什么"))
         self.assertEqual(service.starts, 0)
-        self.assertEqual(spoken, [])
+        self.assertIn("尚未打开", spoken[0][0])
+        self.assertTrue(spoken[0][1]["allow_interrupt"])
 
     def test_runtime_close_is_silent(self):
         service = FakeService(running=True)

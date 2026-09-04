@@ -31,6 +31,7 @@ _CLOSE_PHRASES = (
     "别看了",
 )
 _OPEN_PHRASES = (
+    "开摄像头",
     "打开摄像头",
     "开启摄像头",
     "启动摄像头",
@@ -84,7 +85,7 @@ def classify_vision_command(
     clean = _normalize(text).replace("小安", "")
     if any(phrase in clean for phrase in _CLOSE_PHRASES):
         return VisionCommand.CLOSE
-    if active and any(phrase in clean for phrase in _DESCRIBE_PHRASES):
+    if any(phrase in clean for phrase in _DESCRIBE_PHRASES):
         return VisionCommand.DESCRIBE
     if active and any(phrase in clean for phrase in _ACTIVE_VISUAL_FOLLOWUPS):
         return VisionCommand.DESCRIBE

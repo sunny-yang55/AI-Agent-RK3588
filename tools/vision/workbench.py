@@ -136,11 +136,10 @@ def summarize_colored_blocks(detections: list[ColoredBlockDetection]) -> str:
         return "工作台上暂时没有检测到彩色物块。"
     counts = {}
     for item in detections:
-        key = (item.color_zh, item.shape_zh)
-        counts[key] = counts.get(key, 0) + 1
+        counts[item.color_zh] = counts.get(item.color_zh, 0) + 1
     parts = [
-        f"{count}个{color}{shape}"
-        for (color, shape), count in counts.items()
+        f"{count}个{color}物块"
+        for color, count in counts.items()
     ]
     return "我在工作台上看到" + "、".join(parts) + "。"
 
@@ -158,6 +157,18 @@ def answer_workbench_query(
     requested_shapes = {
         shape for shape, label in shape_labels.items() if label in text
     }
+    if requested_shapes:
+        requested_color_objects = [
+            item for item in detections
+            if not requested_colors or item.color in requested_colors
+        ]
+        if requested_color_objects:
+            color_text = "、".join(
+                sorted({item.color_zh for item in requested_color_objects})
+            )
+            return f"看到了{color_text}物块，但目前还不能可靠确认它的形状。"
+        target_color = "".join(COLOR_ZH[color] for color in sorted(requested_colors))
+        return f"暂时没有看到{target_color}物块。"
     if not requested_colors and not requested_shapes:
         return summarize_colored_blocks(detections)
     matches = [
@@ -181,7 +192,7 @@ def select_stable_workbench_snapshot(
     if not history:
         return []
     signatures = [
-        tuple(sorted((item.color, item.shape) for item in frame))
+        tuple(sorted(item.color for item in frame))
         for frame in history
     ]
     winning_count = max(Counter(signatures).values())
