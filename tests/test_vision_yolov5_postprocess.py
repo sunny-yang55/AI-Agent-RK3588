@@ -15,6 +15,8 @@ sys.modules[SPEC.name] = yolov5
 SPEC.loader.exec_module(yolov5)
 
 YoloDetection = yolov5.YoloDetection
+TemporalDetectionStabilizer = yolov5.TemporalDetectionStabilizer
+answer_visual_query = yolov5.answer_visual_query
 postprocess_yolov5 = yolov5.postprocess_yolov5
 summarize_detections = yolov5.summarize_detections
 
@@ -74,6 +76,24 @@ class YOLOv5PostprocessTests(unittest.TestCase):
             YoloDetection(67, "cell phone", "手机", 0.30, (0, 0, 10, 10)),
         ]
         self.assertEqual(summarize_detections(detections), "我看到1部手机。")
+
+    def test_presence_question_reports_found_and_missing_targets(self):
+        detections = [
+            YoloDetection(67, "cell phone", "手机", 0.65, (0, 0, 10, 10)),
+        ]
+        self.assertEqual(
+            answer_visual_query("看到手机和本子了吗", detections),
+            "看到了手机，暂时没有看到书。",
+        )
+
+    def test_temporal_stabilizer_rejects_single_frame_count_spike(self):
+        person = YoloDetection(0, "person", "人", 0.8, (0, 0, 10, 10))
+        extra = YoloDetection(0, "person", "人", 0.7, (10, 0, 20, 10))
+        stabilizer = TemporalDetectionStabilizer(window_size=5)
+        stabilizer.update([person])
+        stabilizer.update([person])
+        stable = stabilizer.update([person, extra])
+        self.assertEqual(len(stable), 1)
 
     def test_detector_adds_static_batch_dimension(self):
         source = MODULE_PATH.read_text(encoding="utf-8")

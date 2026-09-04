@@ -36,7 +36,7 @@ class VisionVoiceController:
                 self._speak(f"摄像头打开失败：{reason}", allow_interrupt=False)
                 return True
             try:
-                message = self.service.describe()
+                message = self.service.describe(text)
             except Exception as exc:
                 message = f"视觉识别失败：{exc}"
             self._speak(message, allow_interrupt=False)

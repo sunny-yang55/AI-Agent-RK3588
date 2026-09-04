@@ -27,11 +27,16 @@ def _vision_process_main(
     display = None
     detector = None
     latest_detections = []
+    stable_detections = []
+    stabilizer = None
     failed = False
     try:
         camera = camera_factory() if camera_factory else OpenCVCameraSource(config)
         display = display_factory() if display_factory else OpenCVVisionWindow()
         if detection_enabled:
+            from .yolov5_rknn import TemporalDetectionStabilizer
+
+            stabilizer = TemporalDetectionStabilizer()
             if detector_factory is not None:
                 detector = detector_factory()
             else:
@@ -58,6 +63,7 @@ def _vision_process_main(
                 frame.sequence == 1 or frame.sequence % max(1, detection_interval) == 0
             ):
                 latest_detections = detector.detect(frame.image)
+                stable_detections = stabilizer.update(latest_detections)
             stop_requested = False
             while connection.poll():
                 message = connection.recv()
@@ -66,13 +72,15 @@ def _vision_process_main(
                     stop_requested = True
                     break
                 if command == "describe":
-                    from .yolov5_rknn import summarize_detections
+                    from .yolov5_rknn import answer_visual_query
 
                     connection.send(
                         {
                             "event": "description",
-                            "summary": summarize_detections(latest_detections),
-                            "detections": [item.__dict__ for item in latest_detections],
+                            "summary": answer_visual_query(
+                                str(message.get("query", "")), stable_detections
+                            ),
+                            "detections": [item.__dict__ for item in stable_detections],
                         }
                     )
             if detector is not None:
@@ -206,11 +214,11 @@ class ProcessVisionService:
             connection.close()
         return self.session.state is VisionSessionState.CLOSED
 
-    def describe(self, *, timeout: float = 3.0) -> str:
+    def describe(self, query: str = "", *, timeout: float = 3.0) -> str:
         """Request the latest stable detection summary from the child."""
         if not self.is_running or self._connection is None:
             raise RuntimeError("vision service is not running")
-        self._connection.send({"command": "describe"})
+        self._connection.send({"command": "describe", "query": query})
         deadline = time.monotonic() + max(0.0, timeout)
         while time.monotonic() < deadline:
             remaining = deadline - time.monotonic()

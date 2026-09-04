@@ -40,6 +40,7 @@ class FakeService:
         self.stops = 0
         self.session = SimpleNamespace(error=None)
         self.description = "我看到1个人。"
+        self.query = None
 
     @property
     def is_running(self):
@@ -55,7 +56,8 @@ class FakeService:
         self.running = False
         return self.stop_result
 
-    def describe(self):
+    def describe(self, query=""):
+        self.query = query
         return self.description
 
 
@@ -101,6 +103,7 @@ class VisionVoiceControllerTests(unittest.TestCase):
         controller, spoken = self.make_controller(service)
         self.assertTrue(controller.handle("前面有什么"))
         self.assertEqual(spoken[0][0], "我看到1个人。")
+        self.assertEqual(service.query, "前面有什么")
 
     def test_visual_question_starts_camera_when_closed(self):
         service = FakeService()

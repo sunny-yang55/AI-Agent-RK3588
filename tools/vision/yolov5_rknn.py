@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import statistics
 import time
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -49,6 +51,14 @@ MEASURE_WORDS = {
     "键盘": "个", "鼠标": "个", "手机": "部", "书": "本", "剪刀": "把",
 }
 
+VISUAL_QUERY_ALIASES = {
+    "本子": "书",
+    "书本": "书",
+    "手机": "手机",
+    "电话": "手机",
+    "笔记本电脑": "笔记本电脑",
+}
+
 ANCHORS = np.asarray(
     (
         ((10, 13), (16, 30), (33, 23)),
@@ -66,6 +76,33 @@ class YoloDetection:
     label_zh: str
     confidence: float
     box: tuple[int, int, int, int]
+
+
+class TemporalDetectionStabilizer:
+    """Suppress one-frame count changes while retaining recent boxes."""
+
+    def __init__(self, window_size: int = 5) -> None:
+        if window_size < 1:
+            raise ValueError("window_size must be positive")
+        self._history = deque(maxlen=window_size)
+
+    def update(self, detections: list[YoloDetection]) -> list[YoloDetection]:
+        self._history.append(list(detections))
+        if len(self._history) < 3:
+            return list(detections)
+        labels = {item.label for frame in self._history for item in frame}
+        selected = []
+        for label in labels:
+            counts = [sum(item.label == label for item in frame) for frame in self._history]
+            stable_count = int(statistics.median(counts))
+            candidates = [
+                item
+                for frame in reversed(self._history)
+                for item in frame
+                if item.label == label
+            ]
+            selected.extend(sorted(candidates, key=lambda item: item.confidence, reverse=True)[:stable_count])
+        return sorted(selected, key=lambda item: item.confidence, reverse=True)
 
 
 def _nms(boxes: np.ndarray, scores: np.ndarray, threshold: float) -> np.ndarray:
@@ -245,6 +282,29 @@ def summarize_detections(
         for label, count in counts.items()
     ]
     return "我看到" + "、".join(parts) + "。"
+
+
+def answer_visual_query(text: str, detections: list[YoloDetection]) -> str:
+    """Answer supported object-presence questions from grounded detections."""
+    targets = []
+    for phrase, label_zh in VISUAL_QUERY_ALIASES.items():
+        if phrase in text and label_zh not in targets:
+            targets.append(label_zh)
+    if not targets:
+        return summarize_detections(detections)
+    visible = {
+        item.label_zh
+        for item in detections
+        if item.confidence >= 0.30
+    }
+    found = [label for label in targets if label in visible]
+    missing = [label for label in targets if label not in visible]
+    parts = []
+    if found:
+        parts.append("看到了" + "、".join(found))
+    if missing:
+        parts.append("暂时没有看到" + "、".join(missing))
+    return "，".join(parts) + "。"
 
 
 def draw_detections(image: np.ndarray, detections: list[YoloDetection]) -> np.ndarray:
