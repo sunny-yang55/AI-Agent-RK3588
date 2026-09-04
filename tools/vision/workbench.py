@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -100,9 +101,15 @@ class ColorBlockDetector:
                     4.0 * np.pi * area / (perimeter * perimeter)
                     if perimeter > 0 else 0.0
                 )
+                extent = area / max(1.0, float(w * h))
+                aspect = width / max(1.0, height)
                 if vertices == 3:
                     shape, shape_zh = "triangular_pyramid", "三棱锥"
-                elif circularity >= 0.84:
+                elif vertices >= 6 or (
+                    0.70 <= aspect <= 1.43
+                    and circularity >= 0.68
+                    and extent < 0.88
+                ):
                     shape, shape_zh = "cylinder", "圆柱体"
                 else:
                     shape, shape_zh = "cube", "正方体"
@@ -138,10 +145,60 @@ def summarize_colored_blocks(detections: list[ColoredBlockDetection]) -> str:
     return "我在工作台上看到" + "、".join(parts) + "。"
 
 
+def answer_workbench_query(
+    text: str,
+    detections: list[ColoredBlockDetection],
+) -> str:
+    requested_colors = {color for color, label in COLOR_ZH.items() if label in text}
+    shape_labels = {
+        "cube": "正方体",
+        "cylinder": "圆柱体",
+        "triangular_pyramid": "三棱锥",
+    }
+    requested_shapes = {
+        shape for shape, label in shape_labels.items() if label in text
+    }
+    if not requested_colors and not requested_shapes:
+        return summarize_colored_blocks(detections)
+    matches = [
+        item for item in detections
+        if (not requested_colors or item.color in requested_colors)
+        and (not requested_shapes or item.shape in requested_shapes)
+    ]
+    if matches:
+        return summarize_colored_blocks(matches).replace("我在工作台上", "")
+    target = "".join(COLOR_ZH[color] for color in requested_colors)
+    target += "".join(shape_labels[shape] for shape in requested_shapes)
+    if requested_colors and not requested_shapes:
+        target += "物块"
+    return f"暂时没有看到{target}。"
+
+
+def select_stable_workbench_snapshot(
+    history: list[list[ColoredBlockDetection]],
+) -> list[ColoredBlockDetection]:
+    """Choose the most frequent recent color/shape scene, newest on ties."""
+    if not history:
+        return []
+    signatures = [
+        tuple(sorted((item.color, item.shape) for item in frame))
+        for frame in history
+    ]
+    winning_count = max(Counter(signatures).values())
+    winning = {
+        signature for signature, count in Counter(signatures).items()
+        if count == winning_count
+    }
+    for index in range(len(history) - 1, -1, -1):
+        if signatures[index] in winning:
+            return list(history[index])
+    return []
+
+
 def is_workbench_query(text: str) -> bool:
     return any(
         phrase in text
-        for phrase in ("工作台", "桌面", "物块", "方块", "正方体", "圆柱", "三棱锥", "红色", "黄色", "蓝色", "绿色")
+        for phrase in ("工作台", "桌面", "桌上", "物块", "方块", "正方体", "圆柱", "三棱锥", "红色", "黄色", "蓝色", "绿色")
     )
 
 

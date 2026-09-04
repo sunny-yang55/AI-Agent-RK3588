@@ -10,9 +10,11 @@ import numpy as np
 from tools.vision.workbench import (
     ColorBlockDetector,
     WorkbenchROI,
+    answer_workbench_query,
     load_workbench_roi,
     is_workbench_query,
     save_workbench_roi,
+    select_stable_workbench_snapshot,
     summarize_colored_blocks,
 )
 
@@ -64,9 +66,33 @@ class WorkbenchVisionTests(unittest.TestCase):
         self.assertIn(("blue", "triangular_pyramid"), shapes)
 
     def test_workbench_queries_are_routed_to_color_channel(self):
-        for text in ("桌面有什么", "看到绿色物块了吗", "有没有红色方块"):
+        for text in ("桌面有什么", "桌上有什么", "看到绿色物块了吗", "有没有红色方块"):
             self.assertTrue(is_workbench_query(text))
         self.assertFalse(is_workbench_query("前面有什么"))
+
+    def test_specific_query_only_reports_matching_objects(self):
+        image = np.full((220, 400, 3), 255, dtype=np.uint8)
+        cv2.rectangle(image, (20, 20), (80, 80), (0, 0, 255), -1)
+        cv2.circle(image, (180, 55), 32, (0, 255, 0), -1)
+        detections = ColorBlockDetector().detect(image)
+        self.assertEqual(
+            answer_workbench_query("有没有绿色物块", detections),
+            "看到1个绿色圆柱体。",
+        )
+        self.assertEqual(
+            answer_workbench_query("有没有红色三棱锥", detections),
+            "暂时没有看到红色三棱锥。",
+        )
+
+    def test_stable_snapshot_ignores_one_frame_shape_flip(self):
+        image = np.full((180, 220, 3), 255, dtype=np.uint8)
+        cv2.rectangle(image, (40, 40), (100, 100), (0, 255, 0), -1)
+        cube = ColorBlockDetector().detect(image)
+        circle = np.full((180, 220, 3), 255, dtype=np.uint8)
+        cv2.circle(circle, (70, 70), 30, (0, 255, 0), -1)
+        cylinder = ColorBlockDetector().detect(circle)
+        stable = select_stable_workbench_snapshot([cube, cube, cylinder])
+        self.assertEqual(stable[0].shape, "cube")
 
 
 if __name__ == "__main__":

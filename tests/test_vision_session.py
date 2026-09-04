@@ -58,6 +58,18 @@ class VisionCommandTests(unittest.TestCase):
                 VisionCommand.DESCRIBE,
             )
 
+    def test_workbench_queries_never_fall_through_to_llm_when_active(self):
+        for phrase in (
+            "看一下桌上有什么东西",
+            "有没有红色三棱锥",
+            "工作台上有哪些物块",
+            "工作台上有哪些东西",
+        ):
+            self.assertEqual(
+                classify_vision_command(phrase, active=True),
+                VisionCommand.DESCRIBE,
+            )
+
     def test_ambiguous_look_does_not_open(self):
         for phrase in ("我看这件事可以", "查看天气", "看起来不错"):
             self.assertIsNone(classify_vision_command(phrase), phrase)

@@ -47,6 +47,8 @@ _DESCRIBE_PHRASES = (
     "看下前面",
     "有什么东西",
     "有什么物体",
+    "有哪些东西",
+    "有哪些物块",
 )
 _ACTIVE_VISUAL_FOLLOWUPS = (
     "没有看到",
@@ -85,6 +87,14 @@ def classify_vision_command(
     if active and any(phrase in clean for phrase in _DESCRIBE_PHRASES):
         return VisionCommand.DESCRIBE
     if active and any(phrase in clean for phrase in _ACTIVE_VISUAL_FOLLOWUPS):
+        return VisionCommand.DESCRIBE
+    workbench_terms = (
+        "桌上", "桌面", "工作台", "物块", "方块",
+        "正方体", "圆柱", "三棱锥", "红色", "黄色", "蓝色", "绿色",
+    )
+    if active and any(term in clean for term in workbench_terms) and any(
+        word in clean for word in ("有没", "有什么", "有哪些", "看到", "看见")
+    ):
         return VisionCommand.DESCRIBE
     if any(phrase in clean for phrase in _OPEN_PHRASES):
         return VisionCommand.OPEN

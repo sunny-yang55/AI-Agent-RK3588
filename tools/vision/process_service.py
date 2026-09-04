@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import multiprocessing
 import time
+from collections import deque
 from collections.abc import Callable
 from multiprocessing.connection import Connection
 from typing import Any
@@ -33,6 +34,8 @@ def _vision_process_main(
     workbench_detector = None
     workbench_roi = None
     workbench_detections = []
+    stable_workbench_detections = []
+    workbench_history = deque(maxlen=5)
     failed = False
     try:
         camera = camera_factory() if camera_factory else OpenCVCameraSource(config)
@@ -71,6 +74,12 @@ def _vision_process_main(
             display_image = frame.image
             if workbench_detector is not None:
                 workbench_detections = workbench_detector.detect(frame.image)
+                workbench_history.append(workbench_detections)
+                from .workbench import select_stable_workbench_snapshot
+
+                stable_workbench_detections = select_stable_workbench_snapshot(
+                    list(workbench_history)
+                )
             if detector is not None and (
                 frame.sequence == 1 or frame.sequence % max(1, detection_interval) == 0
             ):
@@ -85,11 +94,13 @@ def _vision_process_main(
                     break
                 if command == "describe":
                     from .yolov5_rknn import answer_visual_query
-                    from .workbench import is_workbench_query, summarize_colored_blocks
+                    from .workbench import answer_workbench_query, is_workbench_query
 
                     query = str(message.get("query", ""))
                     if is_workbench_query(query):
-                        summary = summarize_colored_blocks(workbench_detections)
+                        summary = answer_workbench_query(
+                            query, stable_workbench_detections
+                        )
                     else:
                         summary = answer_visual_query(query, stable_detections)
 
@@ -99,7 +110,7 @@ def _vision_process_main(
                             "summary": summary,
                             "detections": [item.__dict__ for item in stable_detections],
                             "workbench_objects": [
-                                item.__dict__ for item in workbench_detections
+                                item.__dict__ for item in stable_workbench_detections
                             ],
                         }
                     )
@@ -107,7 +118,9 @@ def _vision_process_main(
                     connection.send(
                         {
                             "event": "workbench_objects",
-                            "objects": [item.__dict__ for item in workbench_detections],
+                            "objects": [
+                                item.__dict__ for item in stable_workbench_detections
+                            ],
                         }
                     )
             if detector is not None:
