@@ -84,6 +84,15 @@ class WorkbenchVisionTests(unittest.TestCase):
             "看到了红色物块，但目前还不能可靠确认它的形状。",
         )
 
+    def test_asr_shape_alias_keeps_answer_grounded(self):
+        image = np.full((160, 200, 3), 255, dtype=np.uint8)
+        cv2.rectangle(image, (40, 40), (100, 100), (0, 0, 255), -1)
+        detections = ColorBlockDetector().detect(image)
+        self.assertEqual(
+            answer_workbench_query("有没有红色三轮锥", detections),
+            "看到了红色物块，但目前还不能可靠确认它的形状。",
+        )
+
     def test_stable_snapshot_ignores_one_frame_shape_flip(self):
         image = np.full((180, 220, 3), 255, dtype=np.uint8)
         cv2.rectangle(image, (40, 40), (100, 100), (0, 255, 0), -1)

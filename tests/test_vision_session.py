@@ -76,6 +76,13 @@ class VisionCommandTests(unittest.TestCase):
                 VisionCommand.DESCRIBE,
             )
 
+    def test_short_shape_questions_and_asr_aliases_are_visual(self):
+        for phrase in ("有黄色正方体吗", "有没有红色三轮锥"):
+            self.assertEqual(
+                classify_vision_command(phrase, active=True),
+                VisionCommand.DESCRIBE,
+            )
+
     def test_ambiguous_look_does_not_open(self):
         for phrase in ("我看这件事可以", "查看天气", "看起来不错"):
             self.assertIsNone(classify_vision_command(phrase), phrase)

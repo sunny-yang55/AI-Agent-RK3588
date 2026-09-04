@@ -91,10 +91,12 @@ def classify_vision_command(
         return VisionCommand.DESCRIBE
     workbench_terms = (
         "桌上", "桌面", "工作台", "物块", "方块",
-        "正方体", "圆柱", "三棱锥", "红色", "黄色", "蓝色", "绿色",
+        "正方体", "圆柱", "三棱锥", "三轮锥", "三菱锥",
+        "红色", "黄色", "蓝色", "绿色",
     )
-    if active and any(term in clean for term in workbench_terms) and any(
-        word in clean for word in ("有没", "有什么", "有哪些", "看到", "看见")
+    if active and any(term in clean for term in workbench_terms) and (
+        any(word in clean for word in ("有没", "有什么", "有哪些", "看到", "看见"))
+        or clean.endswith(("吗", "呢"))
     ):
         return VisionCommand.DESCRIBE
     if any(phrase in clean for phrase in _OPEN_PHRASES):

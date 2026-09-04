@@ -154,8 +154,16 @@ def answer_workbench_query(
         "cylinder": "圆柱体",
         "triangular_pyramid": "三棱锥",
     }
+    shape_aliases = {
+        "正方体": "cube",
+        "圆柱体": "cylinder",
+        "圆柱": "cylinder",
+        "三棱锥": "triangular_pyramid",
+        "三轮锥": "triangular_pyramid",
+        "三菱锥": "triangular_pyramid",
+    }
     requested_shapes = {
-        shape for shape, label in shape_labels.items() if label in text
+        shape for phrase, shape in shape_aliases.items() if phrase in text
     }
     if requested_shapes:
         requested_color_objects = [
@@ -209,7 +217,7 @@ def select_stable_workbench_snapshot(
 def is_workbench_query(text: str) -> bool:
     return any(
         phrase in text
-        for phrase in ("工作台", "桌面", "桌上", "物块", "方块", "正方体", "圆柱", "三棱锥", "红色", "黄色", "蓝色", "绿色")
+        for phrase in ("工作台", "桌面", "桌上", "物块", "方块", "正方体", "圆柱", "三棱锥", "三轮锥", "三菱锥", "红色", "黄色", "蓝色", "绿色")
     )
 
 
