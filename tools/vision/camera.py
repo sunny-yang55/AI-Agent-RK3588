@@ -2,17 +2,40 @@
 
 from __future__ import annotations
 
+import glob
 import importlib
+import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Callable
 
 
-DEFAULT_CAMERA_DEVICE = (
-    "/dev/v4l/by-id/"
-    "usb-Ruision_USB_FHD_Camera_20220623-c6ec643-video-index0"
-)
+DEFAULT_CAMERA_DEVICE = "auto"
+
+
+def discover_camera_devices() -> list[str]:
+    """Return stable USB capture candidates, excluding RKISP/HDMI nodes."""
+    candidates = []
+    override = os.getenv("VISION_CAMERA_DEVICE", "").strip()
+    if override:
+        candidates.append(override)
+    candidates.extend(sorted(glob.glob("/dev/v4l/by-id/*-video-index0")))
+    for sysfs_path in sorted(glob.glob("/sys/class/video4linux/video*")):
+        try:
+            if "/usb" not in os.path.realpath(sysfs_path + "/device"):
+                continue
+        except OSError:
+            continue
+        candidates.append("/dev/" + os.path.basename(sysfs_path))
+    unique = []
+    targets = set()
+    for candidate in candidates:
+        target = os.path.realpath(candidate)
+        if target not in targets:
+            targets.add(target)
+            unique.append(candidate)
+    return unique
 
 
 class CameraError(RuntimeError):
@@ -119,6 +142,7 @@ class OpenCVCameraSource(CameraSource):
         self._capture: Any | None = None
         self._negotiated_format: CameraFormat | None = None
         self._sequence = 0
+        self._active_device: str | None = None
 
     @property
     def is_open(self) -> bool:
@@ -127,6 +151,10 @@ class OpenCVCameraSource(CameraSource):
     @property
     def negotiated_format(self) -> CameraFormat | None:
         return self._negotiated_format
+
+    @property
+    def active_device(self) -> str | None:
+        return self._active_device
 
     def _get_cv(self) -> Any:
         if self._cv is None:
@@ -153,12 +181,26 @@ class OpenCVCameraSource(CameraSource):
         self.close()
         cv = self._get_cv()
         factory = self._capture_factory or cv.VideoCapture
-        capture = factory(self.config.device, cv.CAP_V4L2)
+        candidates = (
+            discover_camera_devices()
+            if self.config.device == "auto"
+            else [self.config.device]
+        )
+        if not candidates:
+            raise CameraOpenError("no USB video capture device was discovered")
+        capture = None
+        for device in candidates:
+            candidate = factory(device, cv.CAP_V4L2)
+            if candidate.isOpened():
+                capture = candidate
+                self._active_device = device
+                break
+            candidate.release()
+        if capture is None:
+            raise CameraOpenError(
+                "failed to open camera candidates: " + ", ".join(candidates)
+            )
         self._capture = capture
-
-        if not capture.isOpened():
-            self.close()
-            raise CameraOpenError(f"failed to open camera: {self.config.device}")
 
         try:
             self._set_property(
@@ -195,7 +237,8 @@ class OpenCVCameraSource(CameraSource):
 
         ok, image = self._capture.read()
         if not ok or image is None:
-            raise CameraReadError(f"failed to read frame from {self.config.device}")
+            device = self._active_device or self.config.device
+            raise CameraReadError(f"failed to read frame from {device}")
 
         self._sequence += 1
         return CameraFrame(
@@ -209,5 +252,6 @@ class OpenCVCameraSource(CameraSource):
         capture = self._capture
         self._capture = None
         self._negotiated_format = None
+        self._active_device = None
         if capture is not None:
             capture.release()

@@ -41,10 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--device",
-        default=(
-            "/dev/v4l/by-id/"
-            "usb-Ruision_USB_FHD_Camera_20220623-c6ec643-video-index0"
-        ),
+        default="auto",
     )
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
@@ -138,6 +135,7 @@ def run(args: argparse.Namespace) -> int:
 
     try:
         camera_format = camera.open()
+        print(f"[Camera] Device: {camera.active_device}")
         print(
             "[Camera] Negotiated: "
             f"{camera_format.width}x{camera_format.height}, "

@@ -8,6 +8,7 @@ from tools.vision.camera import (
     CameraOpenError,
     CameraReadError,
     OpenCVCameraSource,
+    discover_camera_devices,
 )
 
 
@@ -171,6 +172,26 @@ class OpenCVCameraSourceTests(unittest.TestCase):
             CameraConfig(fourcc="RGB")
         with self.assertRaises(ValueError):
             CameraConfig(buffer_size=0)
+
+    def test_default_config_uses_automatic_discovery(self):
+        self.assertEqual(CameraConfig().device, "auto")
+
+    def test_discovery_prefers_override_and_deduplicates_nodes(self):
+        from unittest.mock import patch
+
+        with patch.dict("os.environ", {"VISION_CAMERA_DEVICE": "/dev/video41"}), patch(
+            "tools.vision.camera.glob.glob",
+            side_effect=[
+                ["/dev/v4l/by-id/camera-video-index0"],
+                ["/sys/class/video4linux/video41"],
+            ],
+        ), patch(
+            "tools.vision.camera.os.path.realpath",
+            side_effect=lambda path: (
+                "/sys/devices/usb/camera" if path.endswith("/device") else "/dev/video41"
+            ),
+        ):
+            self.assertEqual(discover_camera_devices(), ["/dev/video41"])
 
 
 if __name__ == "__main__":
