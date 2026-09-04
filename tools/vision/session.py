@@ -36,10 +36,6 @@ _OPEN_PHRASES = (
     "启动摄像头",
     "打开视觉",
     "开启视觉",
-    "看一下",
-    "看一看",
-    "帮我看",
-    "你看看",
 )
 _DESCRIBE_PHRASES = (
     "前面有什么",
@@ -49,6 +45,8 @@ _DESCRIBE_PHRASES = (
     "这是什么",
     "识别一下",
     "看下前面",
+    "有什么东西",
+    "有什么物体",
 )
 _ACTIVE_VISUAL_FOLLOWUPS = (
     "没有看到",
@@ -63,6 +61,10 @@ _ACTIVE_VISUAL_FOLLOWUPS = (
     "有没有看见",
     "能看到吗",
     "能看见吗",
+    "看一下",
+    "看一看",
+    "帮我看",
+    "你看看",
 )
 
 
@@ -80,11 +82,11 @@ def classify_vision_command(
     clean = _normalize(text).replace("小安", "")
     if any(phrase in clean for phrase in _CLOSE_PHRASES):
         return VisionCommand.CLOSE
-    if any(phrase in clean for phrase in _DESCRIBE_PHRASES):
+    if active and any(phrase in clean for phrase in _DESCRIBE_PHRASES):
         return VisionCommand.DESCRIBE
     if active and any(phrase in clean for phrase in _ACTIVE_VISUAL_FOLLOWUPS):
         return VisionCommand.DESCRIBE
-    if clean in {"看", "看看"} or any(phrase in clean for phrase in _OPEN_PHRASES):
+    if any(phrase in clean for phrase in _OPEN_PHRASES):
         return VisionCommand.OPEN
     if active and clean in {"关掉", "关闭", "结束", "停下"}:
         return VisionCommand.CLOSE

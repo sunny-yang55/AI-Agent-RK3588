@@ -21,8 +21,12 @@ classify_vision_command = vision_session.classify_vision_command
 
 class VisionCommandTests(unittest.TestCase):
     def test_explicit_open_phrases(self):
-        for phrase in ("看", "小安看一下", "帮我看一看", "打开摄像头"):
+        for phrase in ("打开摄像头", "开启视觉", "小安启动摄像头"):
             self.assertEqual(classify_vision_command(phrase), VisionCommand.OPEN)
+
+    def test_look_phrases_never_open_closed_camera(self):
+        for phrase in ("看", "小安看一下", "帮我看一看", "看一下有什么东西"):
+            self.assertIsNone(classify_vision_command(phrase, active=False))
 
     def test_close_takes_precedence(self):
         self.assertEqual(
@@ -31,8 +35,17 @@ class VisionCommandTests(unittest.TestCase):
         )
 
     def test_visual_question_is_describe_command(self):
-        for phrase in ("前面有什么", "你看到了什么", "这是什么", "看下前面"):
-            self.assertEqual(classify_vision_command(phrase), VisionCommand.DESCRIBE)
+        for phrase in (
+            "前面有什么",
+            "你看到了什么",
+            "这是什么",
+            "看下前面",
+            "看一下有什么东西",
+        ):
+            self.assertEqual(
+                classify_vision_command(phrase, active=True),
+                VisionCommand.DESCRIBE,
+            )
 
     def test_visual_followup_requires_active_session(self):
         for phrase in (

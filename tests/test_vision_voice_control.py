@@ -73,7 +73,7 @@ class VisionVoiceControllerTests(unittest.TestCase):
     def test_open_is_handled_locally(self):
         service = FakeService()
         controller, spoken = self.make_controller(service)
-        self.assertTrue(controller.handle("小安看一下"))
+        self.assertTrue(controller.handle("小安打开摄像头"))
         self.assertEqual(service.starts, 1)
         self.assertEqual(spoken[0][0], "摄像头已打开。")
 
@@ -107,12 +107,12 @@ class VisionVoiceControllerTests(unittest.TestCase):
         self.assertEqual(service.query, "前面有什么")
         self.assertTrue(spoken[0][1]["allow_interrupt"])
 
-    def test_visual_question_starts_camera_when_closed(self):
+    def test_visual_question_does_not_start_camera_when_closed(self):
         service = FakeService()
         controller, spoken = self.make_controller(service)
-        self.assertTrue(controller.handle("这是什么"))
-        self.assertEqual(service.starts, 1)
-        self.assertEqual(spoken[0][0], "我看到1个人。")
+        self.assertFalse(controller.handle("这是什么"))
+        self.assertEqual(service.starts, 0)
+        self.assertEqual(spoken, [])
 
     def test_runtime_close_is_silent(self):
         service = FakeService(running=True)
