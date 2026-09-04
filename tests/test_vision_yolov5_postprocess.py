@@ -64,10 +64,16 @@ class YOLOv5PostprocessTests(unittest.TestCase):
 
     def test_summary_filters_low_confidence_candidates(self):
         detections = [
-            YoloDetection(0, "person", "人", 0.39, (0, 0, 10, 10)),
+            YoloDetection(0, "person", "人", 0.29, (0, 0, 10, 10)),
             YoloDetection(39, "bottle", "瓶子", 0.75, (0, 0, 10, 10)),
         ]
         self.assertEqual(summarize_detections(detections), "我看到1个瓶子。")
+
+    def test_summary_speaks_detection_at_point_three(self):
+        detections = [
+            YoloDetection(67, "cell phone", "手机", 0.30, (0, 0, 10, 10)),
+        ]
+        self.assertEqual(summarize_detections(detections), "我看到1部手机。")
 
     def test_detector_adds_static_batch_dimension(self):
         source = MODULE_PATH.read_text(encoding="utf-8")

@@ -35,12 +35,15 @@ class VisionCommandTests(unittest.TestCase):
             self.assertEqual(classify_vision_command(phrase), VisionCommand.DESCRIBE)
 
     def test_visual_followup_requires_active_session(self):
-        phrase = "还有一卷纸看到了吗"
-        self.assertIsNone(classify_vision_command(phrase, active=False))
-        self.assertEqual(
-            classify_vision_command(phrase, active=True),
-            VisionCommand.DESCRIBE,
-        )
+        for phrase in (
+            "还有一卷纸看到了吗",
+            "你没有看到一个本子和一个手机吗不是",
+        ):
+            self.assertIsNone(classify_vision_command(phrase, active=False))
+            self.assertEqual(
+                classify_vision_command(phrase, active=True),
+                VisionCommand.DESCRIBE,
+            )
 
     def test_ambiguous_look_does_not_open(self):
         for phrase in ("我看这件事可以", "查看天气", "看起来不错"):

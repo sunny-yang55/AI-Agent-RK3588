@@ -232,7 +232,7 @@ class RKNNYOLOv5Detector:
 def summarize_detections(
     detections: list[YoloDetection],
     *,
-    minimum_confidence: float = 0.40,
+    minimum_confidence: float = 0.30,
 ) -> str:
     spoken = [item for item in detections if item.confidence >= minimum_confidence]
     if not spoken:

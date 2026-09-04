@@ -51,6 +51,10 @@ _DESCRIBE_PHRASES = (
     "看下前面",
 )
 _ACTIVE_VISUAL_FOLLOWUPS = (
+    "没有看到",
+    "没看到",
+    "没有看见",
+    "没看见",
     "看到了吗",
     "看到吗",
     "看见了吗",
