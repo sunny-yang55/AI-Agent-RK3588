@@ -22,24 +22,24 @@ class VisionVoiceController:
 
         if command is VisionCommand.OPEN:
             if was_running:
-                self._speak("摄像头已经打开。", allow_interrupt=False)
+                self._speak("摄像头已经打开。", allow_interrupt=True)
             elif self.service.start():
-                self._speak("摄像头已打开。", allow_interrupt=False)
+                self._speak("摄像头已打开。", allow_interrupt=True)
             else:
                 reason = self.service.session.error or "未知错误"
-                self._speak(f"摄像头打开失败：{reason}", allow_interrupt=False)
+                self._speak(f"摄像头打开失败：{reason}", allow_interrupt=True)
             return True
 
         if command is VisionCommand.DESCRIBE:
             if not was_running and not self.service.start():
                 reason = self.service.session.error or "未知错误"
-                self._speak(f"摄像头打开失败：{reason}", allow_interrupt=False)
+                self._speak(f"摄像头打开失败：{reason}", allow_interrupt=True)
                 return True
             try:
                 message = self.service.describe(text)
             except Exception as exc:
                 message = f"视觉识别失败：{exc}"
-            self._speak(message, allow_interrupt=False)
+            self._speak(message, allow_interrupt=True)
             return True
 
         if was_running:
@@ -48,7 +48,7 @@ class VisionVoiceController:
         else:
             self.service.stop()
             message = "摄像头已经关闭。"
-        self._speak(message, allow_interrupt=False)
+        self._speak(message, allow_interrupt=True)
         return True
 
     def close(self) -> None:

@@ -97,6 +97,7 @@ class VisionVoiceControllerTests(unittest.TestCase):
         controller, spoken = self.make_controller(service)
         self.assertTrue(controller.handle("打开摄像头"))
         self.assertIn("camera busy", spoken[0][0])
+        self.assertTrue(spoken[0][1]["allow_interrupt"])
 
     def test_visual_question_speaks_latest_description(self):
         service = FakeService(running=True)
@@ -104,6 +105,7 @@ class VisionVoiceControllerTests(unittest.TestCase):
         self.assertTrue(controller.handle("前面有什么"))
         self.assertEqual(spoken[0][0], "我看到1个人。")
         self.assertEqual(service.query, "前面有什么")
+        self.assertTrue(spoken[0][1]["allow_interrupt"])
 
     def test_visual_question_starts_camera_when_closed(self):
         service = FakeService()
