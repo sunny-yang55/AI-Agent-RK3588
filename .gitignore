@@ -13,6 +13,7 @@ config/.env.*
 logs/
 data/
 *.log
+datasets/workbench_shapes/
 
 # Large runtime models and local binary wheels
 models/**/*.rknn
