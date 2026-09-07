@@ -103,6 +103,7 @@ def classify_vision_command(
     workbench_terms = (
         "桌上", "桌面", "工作台", "物块", "方块",
         "正方体", "圆柱", "三棱锥", "三轮锥", "三菱锥",
+        "圆珠体", "三轮车",
         "红色", "黄色", "蓝色", "绿色",
     )
     if active and any(term in clean for term in workbench_terms) and (

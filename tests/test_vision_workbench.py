@@ -106,7 +106,7 @@ class WorkbenchVisionTests(unittest.TestCase):
     def test_location_without_color_asks_for_target(self):
         self.assertEqual(
             answer_workbench_query("物块坐标在哪", []),
-            "请告诉我需要定位哪一种颜色的物块。",
+            "请告诉我需要定位哪一种颜色和形状的物块，例如“红色正方体在哪里”。",
         )
 
     def test_shape_location_never_claims_unreliable_shape(self):
@@ -127,6 +127,21 @@ class WorkbenchVisionTests(unittest.TestCase):
         answer = answer_workbench_query("红色正方体在哪里", [verified])
         self.assertIn("我已经找到1个红色正方体", answer)
         self.assertIn("需要我继续定位", answer)
+        self.assertIn("工作台像素坐标", answer)
+
+    def test_asr_tricycle_alias_can_locate_verified_triangular_pyramid(self):
+        image = np.full((200, 300, 3), 255, dtype=np.uint8)
+        triangle = np.asarray([[20, 100], [60, 30], [100, 100]], dtype=np.int32)
+        cv2.fillPoly(image, [triangle], (0, 0, 255))
+        item = ColorBlockDetector().detect(image)[0]
+        verified = replace(
+            item,
+            shape="triangular_pyramid",
+            shape_zh="三棱锥",
+            shape_verified=True,
+        )
+        answer = answer_workbench_query("红色三轮车在什么地方", [verified])
+        self.assertIn("红色三棱锥", answer)
         self.assertIn("工作台像素坐标", answer)
 
     def test_stable_snapshot_ignores_one_frame_shape_flip(self):

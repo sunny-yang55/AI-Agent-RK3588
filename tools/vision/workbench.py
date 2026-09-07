@@ -243,7 +243,17 @@ def answer_workbench_query(
     text: str,
     detections: list[ColoredBlockDetection],
 ) -> str:
-    requested_colors = {color for color, label in COLOR_ZH.items() if label in text}
+    # Correct the common ASR substitutions only inside the workbench channel.
+    # Do not pass these aliases to the general LLM conversation.
+    normalized_text = (
+        text.replace("圆珠体", "圆柱体")
+        .replace("圆住体", "圆柱体")
+        .replace("三轮车", "三棱锥")
+        .replace("三棱椎", "三棱锥")
+        .replace("三菱锥", "三棱锥")
+        .replace("三轮锥", "三棱锥")
+    )
+    requested_colors = {color for color, label in COLOR_ZH.items() if label in normalized_text}
     shape_labels = {
         "cube": "正方体",
         "cylinder": "圆柱体",
@@ -258,9 +268,9 @@ def answer_workbench_query(
         "三菱锥": "triangular_pyramid",
     }
     requested_shapes = {
-        shape for phrase, shape in shape_aliases.items() if phrase in text
+        shape for phrase, shape in shape_aliases.items() if phrase in normalized_text
     }
-    wants_location = any(word in text for word in ("定位", "位置", "坐标", "在哪", "哪里"))
+    wants_location = any(word in normalized_text for word in ("定位", "位置", "坐标", "在哪", "哪里"))
     if wants_location:
         matches = [
             item for item in detections
@@ -408,7 +418,7 @@ def stabilize_verified_workbench_shapes(
 def is_workbench_query(text: str) -> bool:
     return any(
         phrase in text
-        for phrase in ("工作台", "桌面", "桌上", "物块", "方块", "正方体", "圆柱", "三棱锥", "三轮锥", "三菱锥", "红色", "黄色", "蓝色", "绿色")
+        for phrase in ("工作台", "桌面", "桌上", "物块", "方块", "正方体", "圆柱", "圆珠体", "三棱锥", "三轮锥", "三菱锥", "三轮车", "红色", "黄色", "蓝色", "绿色")
     )
 
 
