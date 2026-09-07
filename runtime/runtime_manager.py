@@ -1,11 +1,13 @@
 import asyncio
 import os
 import time
+from pathlib import Path
 
 from agent import Agent
 from runtime.input_adapter import InputAdapter
 from runtime.streaming_speech import StreamingSpeechPlayer
 from runtime.vision_control import VisionVoiceController
+from runtime.robot_arm_control import RobotArmVoiceController
 import voice_ui as ui
 from speech.filter import ConfidenceFilter, NoiseFilter
 from tools.common.context_resolver import ContextResolver
@@ -32,10 +34,16 @@ class RuntimeManager:
         self.llm = LLMAdapter()
 
         scene_describer = OnlineVisionDescriber()
+        vision_service = ProcessVisionService()
         self.vision = VisionVoiceController(
-            ProcessVisionService(),
+            vision_service,
             self.speech.speak,
             scene_describer=scene_describer,
+        )
+        self.robot_arm = RobotArmVoiceController(
+            vision_service,
+            self.speech.speak,
+            calibration_path=Path(__file__).resolve().parents[1] / "config/robot_arm_calibration.json",
         )
         ui.debug(f"[Vision] 在线场景理解：{scene_describer.status}")
 
@@ -116,6 +124,9 @@ class RuntimeManager:
             # ==========================
 
             raw_text = result.text.strip()
+
+            if self.robot_arm.handle(raw_text):
+                continue
 
             if self.vision.handle(raw_text):
                 continue

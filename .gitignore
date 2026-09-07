@@ -16,6 +16,7 @@ data/
 datasets/workbench_shapes/
 models/vision/workbench_shape_svm.xml
 models/vision/workbench_shape_svm.json
+config/robot_arm_calibration.json
 
 # Large runtime models and local binary wheels
 models/**/*.rknn

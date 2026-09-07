@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "image_size": [1280, 720],
+  "coordinate_space": "full_camera_frame",
+  "method": "homography",
+  "pixel_pts": [],
+  "arm_pts": [],
+  "report": {
+    "rmse_mm": 0.0,
+    "max_error_mm": 0.0
+  },
+  "transform_type": "homography",
+  "homography": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+}
