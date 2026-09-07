@@ -144,7 +144,9 @@ class WorkbenchVisionTests(unittest.TestCase):
         cv2.rectangle(image, (40, 40), (100, 100), (0, 0, 255), -1)
         cube = replace(ColorBlockDetector().detect(image)[0], shape_verified=True)
         flipped = replace(cube, shape="cylinder", shape_zh="圆柱体")
-        stable = stabilize_verified_workbench_shapes([cube, cube, cube, cube, flipped])
+        stable = stabilize_verified_workbench_shapes(
+            [[cube], [cube], [cube], [cube], [flipped]]
+        )
         self.assertTrue(stable[0].shape_verified)
         self.assertEqual(stable[0].shape, "cube")
 
@@ -153,7 +155,9 @@ class WorkbenchVisionTests(unittest.TestCase):
         cv2.rectangle(image, (40, 40), (100, 100), (0, 0, 255), -1)
         cube = replace(ColorBlockDetector().detect(image)[0], shape_verified=True)
         cylinder = replace(cube, shape="cylinder", shape_zh="圆柱体")
-        stable = stabilize_verified_workbench_shapes([cube, cube, cylinder, cylinder, cylinder])
+        stable = stabilize_verified_workbench_shapes(
+            [[cube], [cube], [cylinder], [cylinder], [cylinder]]
+        )
         self.assertFalse(stable[0].shape_verified)
 
 
