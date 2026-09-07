@@ -31,6 +31,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("color", choices=COLORS, help="ground-truth colour label")
     parser.add_argument("shape", choices=SHAPES, help="ground-truth shape label")
     parser.add_argument("--output", default="datasets/workbench_shapes")
+    parser.add_argument(
+        "--split", choices=("train", "val", "test"), default="train",
+        help="dataset split; capture each split in a separate session",
+    )
     return parser.parse_args()
 
 
@@ -46,13 +50,13 @@ def main() -> int:
         print("[Shapes] Missing config/workbench_roi.json; calibrate the workbench first.")
         return 2
     label = f"{args.color}_{args.shape}"
-    output_dir = ROOT / args.output / label
+    output_dir = ROOT / args.output / label / args.split
     output_dir.mkdir(parents=True, exist_ok=True)
     camera = OpenCVCameraSource()
     saved = 0
     try:
         camera.open()
-        print(f"[Shapes] label={label}; s=save, q/Esc=quit")
+        print(f"[Shapes] label={label} split={args.split}; s=save, q/Esc=quit")
         while True:
             image = camera.read().image
             clipped = roi.clipped(image)

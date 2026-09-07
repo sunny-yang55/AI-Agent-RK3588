@@ -15,6 +15,8 @@ class WorkbenchShapeCaptureScriptTests(unittest.TestCase):
         self.assertIn('COLORS = ("red", "yellow", "blue", "green")', source)
         self.assertIn('SHAPES = ("cube", "cylinder", "triangular_pyramid")', source)
         self.assertIn('label = f"{args.color}_{args.shape}"', source)
+        self.assertIn('choices=("train", "val", "test")', source)
+        self.assertIn('label / args.split', source)
         self.assertIn('load_workbench_roi', source)
         self.assertIn('key == ord("s")', source)
         self.assertIn('q/Esc=quit', source)
