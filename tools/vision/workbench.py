@@ -165,6 +165,24 @@ def answer_workbench_query(
     requested_shapes = {
         shape for phrase, shape in shape_aliases.items() if phrase in text
     }
+    wants_location = any(word in text for word in ("定位", "位置", "坐标", "在哪", "哪里"))
+    if wants_location:
+        matches = [
+            item for item in detections
+            if not requested_colors or item.color in requested_colors
+        ]
+        if not requested_colors:
+            return "请告诉我需要定位哪一种颜色的物块。"
+        target = "、".join(COLOR_ZH[color] for color in sorted(requested_colors))
+        if not matches:
+            return f"暂时没有看到{target}物块，无法定位。"
+        positions = "；".join(
+            f"({item.center_roi[0]}, {item.center_roi[1]})" for item in matches
+        )
+        return (
+            f"检测到{len(matches)}个{target}物块，工作台像素坐标为{positions}。"
+            "坐标原点是标定板左上角，尚未换算为机械臂坐标。"
+        )
     if requested_shapes:
         requested_color_objects = [
             item for item in detections

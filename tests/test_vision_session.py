@@ -83,6 +83,13 @@ class VisionCommandTests(unittest.TestCase):
                 VisionCommand.DESCRIBE,
             )
 
+    def test_location_questions_are_visual_when_camera_is_active(self):
+        for phrase in ("定位红色物块", "绿色物块坐标在哪", "黄色物块位置在哪里"):
+            self.assertEqual(
+                classify_vision_command(phrase, active=True),
+                VisionCommand.DESCRIBE,
+            )
+
     def test_ambiguous_look_does_not_open(self):
         for phrase in ("我看这件事可以", "查看天气", "看起来不错"):
             self.assertIsNone(classify_vision_command(phrase), phrase)

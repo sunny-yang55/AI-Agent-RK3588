@@ -93,6 +93,20 @@ class WorkbenchVisionTests(unittest.TestCase):
             "看到了红色物块，但目前还不能可靠确认它的形状。",
         )
 
+    def test_color_location_returns_roi_pixel_coordinates(self):
+        image = np.full((200, 300, 3), 255, dtype=np.uint8)
+        cv2.rectangle(image, (120, 70), (180, 130), (0, 0, 255), -1)
+        detections = ColorBlockDetector(WorkbenchROI(100, 50, 150, 120)).detect(image)
+        answer = answer_workbench_query("定位红色物块", detections)
+        self.assertIn("(50, 50)", answer)
+        self.assertIn("标定板左上角", answer)
+
+    def test_location_without_color_asks_for_target(self):
+        self.assertEqual(
+            answer_workbench_query("物块坐标在哪", []),
+            "请告诉我需要定位哪一种颜色的物块。",
+        )
+
     def test_stable_snapshot_ignores_one_frame_shape_flip(self):
         image = np.full((180, 220, 3), 255, dtype=np.uint8)
         cv2.rectangle(image, (40, 40), (100, 100), (0, 255, 0), -1)
