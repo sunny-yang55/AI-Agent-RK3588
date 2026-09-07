@@ -270,7 +270,10 @@ def answer_workbench_query(
     requested_shapes = {
         shape for phrase, shape in shape_aliases.items() if phrase in normalized_text
     }
-    wants_location = any(word in normalized_text for word in ("定位", "位置", "坐标", "在哪", "哪里"))
+    wants_location = any(
+        word in normalized_text
+        for word in ("定位", "位置", "坐标", "在哪", "哪里", "什么地方", "哪个地方")
+    )
     if wants_location:
         matches = [
             item for item in detections

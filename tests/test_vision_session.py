@@ -84,7 +84,12 @@ class VisionCommandTests(unittest.TestCase):
             )
 
     def test_location_questions_are_visual_when_camera_is_active(self):
-        for phrase in ("定位红色物块", "绿色物块坐标在哪", "黄色物块位置在哪里"):
+        for phrase in (
+            "定位红色物块",
+            "绿色物块坐标在哪",
+            "黄色物块位置在哪里",
+            "红色三轮车在什么地方",
+        ):
             self.assertEqual(
                 classify_vision_command(phrase, active=True),
                 VisionCommand.DESCRIBE,

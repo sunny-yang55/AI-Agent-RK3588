@@ -107,7 +107,7 @@ def classify_vision_command(
         "红色", "黄色", "蓝色", "绿色",
     )
     if active and any(term in clean for term in workbench_terms) and (
-        any(word in clean for word in ("有没", "有什么", "有哪些", "看到", "看见", "定位", "位置", "坐标", "在哪", "哪里"))
+        any(word in clean for word in ("有没", "有什么", "有哪些", "看到", "看见", "定位", "位置", "坐标", "在哪", "哪里", "什么地方", "哪个地方"))
         or clean.endswith(("吗", "呢"))
     ):
         return VisionCommand.DESCRIBE
