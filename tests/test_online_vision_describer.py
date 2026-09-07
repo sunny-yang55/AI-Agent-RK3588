@@ -58,6 +58,15 @@ class OnlineVisionDescriberTests(unittest.TestCase):
         self.assertFalse(describer.is_available)
         self.assertEqual(describer.status, "disabled")
 
+    def test_default_environment_matches_text_runtime(self):
+        with patch.dict(os.environ, {}, clear=True):
+            describer = OnlineVisionDescriber(root=Path("/missing"))
+        self.assertEqual(describer.root, Path("/missing"))
+        # The source-level assertion guards against accidentally restoring the
+        # old, nonexistent .env.rk3588 default.
+        source = (ROOT / "tools/vision/online_describer.py").read_text(encoding="utf-8")
+        self.assertIn('os.getenv("AI_AGENT_ENV", ".env.qwen")', source)
+
     def test_image_and_fact_bounded_prompt_are_sent(self):
         completions = FakeCompletions()
         client = SimpleNamespace(chat=SimpleNamespace(completions=completions))

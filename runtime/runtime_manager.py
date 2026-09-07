@@ -27,15 +27,19 @@ class RuntimeManager:
 
         self.speech = SpeechManager()
 
+        # Load the active .env file before constructing the visual narrator.
+        # This makes VISION_LLM_* settings available on the first request.
+        self.llm = LLMAdapter()
+
+        scene_describer = OnlineVisionDescriber()
         self.vision = VisionVoiceController(
             ProcessVisionService(),
             self.speech.speak,
-            scene_describer=OnlineVisionDescriber(),
+            scene_describer=scene_describer,
         )
+        ui.debug(f"[Vision] 在线场景理解：{scene_describer.status}")
 
         ui.debug("[系统] AI核心加载完成")
-
-        self.llm = LLMAdapter()
 
         # print("[Runtime] Ready")
 

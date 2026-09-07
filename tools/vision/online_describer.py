@@ -49,7 +49,10 @@ class OnlineVisionDescriber:
         self._client = client
 
     def _load_environment(self) -> None:
-        env_name = os.getenv("AI_AGENT_ENV", ".env.rk3588")
+        # Keep the same default as LLMAdapter.  The RK3588 deployment stores
+        # its active credentials in config/.env.qwen; .env.rk3588 is only an
+        # example file and must never be assumed to exist.
+        env_name = os.getenv("AI_AGENT_ENV", ".env.qwen")
         env_path = self.root / "config" / env_name
         if env_path.is_file():
             load_dotenv(env_path, override=False)
