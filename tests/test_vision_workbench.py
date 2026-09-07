@@ -107,6 +107,16 @@ class WorkbenchVisionTests(unittest.TestCase):
             "请告诉我需要定位哪一种颜色的物块。",
         )
 
+    def test_shape_location_never_claims_unreliable_shape(self):
+        image = np.full((200, 300, 3), 255, dtype=np.uint8)
+        cv2.rectangle(image, (20, 20), (80, 80), (0, 255, 0), -1)
+        cv2.circle(image, (160, 50), 30, (0, 255, 0), -1)
+        answer = answer_workbench_query(
+            "绿色正方体在哪里", ColorBlockDetector().detect(image)
+        )
+        self.assertIn("不能可靠区分", answer)
+        self.assertIn("2个绿色物块", answer)
+
     def test_stable_snapshot_ignores_one_frame_shape_flip(self):
         image = np.full((180, 220, 3), 255, dtype=np.uint8)
         cv2.rectangle(image, (40, 40), (100, 100), (0, 255, 0), -1)

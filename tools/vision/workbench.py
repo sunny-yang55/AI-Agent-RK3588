@@ -179,6 +179,13 @@ def answer_workbench_query(
         positions = "；".join(
             f"({item.center_roi[0]}, {item.center_roi[1]})" for item in matches
         )
+        if requested_shapes:
+            shape_text = "、".join(shape_labels[shape] for shape in requested_shapes)
+            return (
+                f"当前还不能可靠区分{target}物块是否为{shape_text}，"
+                f"但检测到{len(matches)}个{target}物块，坐标为{positions}。"
+                "请先按颜色定位，形状定位需要完成专用标定。"
+            )
         return (
             f"检测到{len(matches)}个{target}物块，工作台像素坐标为{positions}。"
             "坐标原点是标定板左上角，尚未换算为机械臂坐标。"
