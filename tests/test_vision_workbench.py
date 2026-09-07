@@ -2,6 +2,7 @@
 
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 import cv2
@@ -15,6 +16,7 @@ from tools.vision.workbench import (
     is_workbench_query,
     save_workbench_roi,
     select_stable_workbench_snapshot,
+    stabilize_verified_workbench_shapes,
     summarize_colored_blocks,
 )
 
@@ -135,6 +137,23 @@ class WorkbenchVisionTests(unittest.TestCase):
         cylinder = ColorBlockDetector().detect(circle)
         stable = select_stable_workbench_snapshot([cube, cube, cylinder])
         self.assertEqual(stable[0].color, "green")
+
+    def test_verified_shape_needs_four_consistent_nearby_votes(self):
+        image = np.full((180, 220, 3), 255, dtype=np.uint8)
+        cv2.rectangle(image, (40, 40), (100, 100), (0, 0, 255), -1)
+        cube = replace(ColorBlockDetector().detect(image)[0], shape_verified=True)
+        flipped = replace(cube, shape="cylinder", shape_zh="圆柱体")
+        stable = stabilize_verified_workbench_shapes([cube, cube, cube, cube, flipped])
+        self.assertTrue(stable[0].shape_verified)
+        self.assertEqual(stable[0].shape, "cube")
+
+    def test_shape_with_insufficient_votes_is_not_verified(self):
+        image = np.full((180, 220, 3), 255, dtype=np.uint8)
+        cv2.rectangle(image, (40, 40), (100, 100), (0, 0, 255), -1)
+        cube = replace(ColorBlockDetector().detect(image)[0], shape_verified=True)
+        cylinder = replace(cube, shape="cylinder", shape_zh="圆柱体")
+        stable = stabilize_verified_workbench_shapes([cube, cube, cylinder, cylinder, cylinder])
+        self.assertFalse(stable[0].shape_verified)
 
 
 if __name__ == "__main__":

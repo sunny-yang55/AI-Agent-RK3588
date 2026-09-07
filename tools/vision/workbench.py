@@ -347,6 +347,56 @@ def select_stable_workbench_snapshot(
     return []
 
 
+def stabilize_verified_workbench_shapes(
+    history: list[list[ColoredBlockDetection]],
+    *,
+    minimum_votes: int = 4,
+    max_center_distance: float = 40.0,
+) -> list[ColoredBlockDetection]:
+    """Return newest objects with only temporally agreed model shapes verified.
+
+    Objects are matched by colour and nearby ROI centre, so multiple blocks of
+    the same colour do not share a vote. A shape must appear in at least four
+    of the last five frames; otherwise only the safe colour-only result stays
+    available for speech and robot integrations.
+    """
+    if not history:
+        return []
+    newest = history[-1]
+    stable = []
+    for current in newest:
+        votes: Counter[str] = Counter()
+        for frame in history:
+            candidates = [
+                item for item in frame
+                if item.color == current.color and item.shape_verified
+            ]
+            if not candidates:
+                continue
+            nearest = min(
+                candidates,
+                key=lambda item: (
+                    (item.center_roi[0] - current.center_roi[0]) ** 2
+                    + (item.center_roi[1] - current.center_roi[1]) ** 2
+                ),
+            )
+            distance = (
+                (nearest.center_roi[0] - current.center_roi[0]) ** 2
+                + (nearest.center_roi[1] - current.center_roi[1]) ** 2
+            ) ** 0.5
+            if distance <= max_center_distance:
+                votes[nearest.shape] += 1
+        if votes:
+            shape, count = votes.most_common(1)[0]
+            if count >= minimum_votes:
+                stable.append(
+                    replace(current, shape=shape, shape_zh=SHAPE_ZH[shape], shape_verified=True)
+                )
+                continue
+        stable.append(replace(current, shape_verified=False))
+    return stable
+
+
 def is_workbench_query(text: str) -> bool:
     return any(
         phrase in text

@@ -90,9 +90,9 @@ def _vision_process_main(
                         frame.image, workbench_detections, shape_classifier
                     )
                 workbench_history.append(workbench_detections)
-                from .workbench import select_stable_workbench_snapshot
+                from .workbench import stabilize_verified_workbench_shapes
 
-                stable_workbench_detections = select_stable_workbench_snapshot(
+                stable_workbench_detections = stabilize_verified_workbench_shapes(
                     list(workbench_history)
                 )
             if detector is not None and (
