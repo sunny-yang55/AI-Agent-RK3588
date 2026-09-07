@@ -34,13 +34,55 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--model", default="models/vision/workbench_shape_svm.xml")
     parser.add_argument("--report", default="reports/vision-workbench/shape-model-report.json")
+    parser.add_argument(
+        "--feature",
+        choices=("contour", "hog", "hybrid"),
+        default="hybrid",
+        help="image descriptor; hybrid combines contour geometry with HOG edges",
+    )
+    parser.add_argument(
+        "--no-augment",
+        action="store_true",
+        help="disable train-only rotation and brightness augmentation",
+    )
     return parser.parse_args()
 
 
-def load_split(dataset: Path, split: str):
+def shape_feature(image: np.ndarray, feature_mode: str) -> np.ndarray:
+    from tools.vision.shape_classifier import extract_hog_shape_features, extract_shape_features
+
+    if feature_mode == "contour":
+        return extract_shape_features(image).values
+    hog = extract_hog_shape_features(image)
+    if feature_mode == "hog":
+        return hog
+    return np.concatenate((extract_shape_features(image).values, hog)).astype(np.float32)
+
+
+def augmented_images(image: np.ndarray) -> list[np.ndarray]:
+    """Create modest training-only variants without changing the test set."""
     import cv2
 
-    from tools.vision.shape_classifier import SHAPE_LABELS, extract_shape_features
+    height, width = image.shape[:2]
+    center = (width / 2.0, height / 2.0)
+    variants = [image]
+    for angle in (-12.0, -6.0, 6.0, 12.0):
+        matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+        variants.append(
+            cv2.warpAffine(
+                image, matrix, (width, height), flags=cv2.INTER_LINEAR,
+                borderMode=cv2.BORDER_CONSTANT, borderValue=(255, 255, 255),
+            )
+        )
+    for factor in (0.82, 1.18):
+        variants.append(cv2.convertScaleAbs(image, alpha=factor, beta=0))
+    return variants
+
+
+def load_split(dataset: Path, split: str, feature_mode: str, *, augment: bool = False):
+    import cv2
+
+    from tools.vision.shape_classifier import SHAPE_LABELS
 
     features, labels, class_labels, sample_paths, errors, counts = [], [], [], [], [], Counter()
     for colour_shape_dir in sorted(path for path in dataset.iterdir() if path.is_dir()):
@@ -57,10 +99,12 @@ def load_split(dataset: Path, split: str):
         for path in sorted((colour_shape_dir / split).glob("*.jpg")):
             image = cv2.imread(str(path))
             try:
-                features.append(extract_shape_features(image).values)
-                labels.append(SHAPE_LABELS.index(shape))
-                class_labels.append(colour_shape_dir.name)
-                sample_paths.append(path.relative_to(ROOT).as_posix())
+                candidates = augmented_images(image) if augment else [image]
+                for candidate in candidates:
+                    features.append(shape_feature(candidate, feature_mode))
+                    labels.append(SHAPE_LABELS.index(shape))
+                    class_labels.append(colour_shape_dir.name)
+                    sample_paths.append(path.relative_to(ROOT).as_posix())
                 counts[colour_shape_dir.name] += 1
             except ValueError as exc:
                 errors.append(f"{path}: {exc}")
@@ -149,7 +193,9 @@ def main() -> int:
     if not dataset.is_dir():
         print(f"[ShapeTrain] dataset not found: {dataset}")
         return 2
-    train_x, train_y, _train_classes, _train_paths, train_counts, train_errors = load_split(dataset, "train")
+    train_x, train_y, _train_classes, _train_paths, train_counts, train_errors = load_split(
+        dataset, "train", args.feature, augment=not args.no_augment
+    )
     required = {label for label in SHAPE_LABELS if not (train_y == SHAPE_LABELS.index(label)).any()}
     if required:
         print(f"[ShapeTrain] missing train samples for: {', '.join(sorted(required))}")
@@ -160,8 +206,8 @@ def main() -> int:
     model = cv2.ml.SVM_create()
     model.setType(cv2.ml.SVM_C_SVC)
     model.setKernel(cv2.ml.SVM_RBF)
-    model.setC(2.0)
-    model.setGamma(0.5)
+    model.setC(5.0)
+    model.setGamma(0.001 if args.feature in ("hog", "hybrid") else 0.5)
     model.train(train_x, cv2.ml.ROW_SAMPLE, train_y)
     output_model = ROOT / args.model
     output_model.parent.mkdir(parents=True, exist_ok=True)
@@ -171,9 +217,16 @@ def main() -> int:
         json.dumps({"labels": SHAPE_LABELS, "mean": mean.tolist(), "scale": scale.tolist()}, indent=2) + "\n",
         encoding="utf-8",
     )
-    report = {"train_counts": dict(train_counts), "discarded": train_errors}
+    report = {
+        "feature_mode": args.feature,
+        "train_augmentation": not args.no_augment,
+        "train_counts": dict(train_counts),
+        "discarded": train_errors,
+    }
     for split in ("train", "val", "test"):
-        features, labels, class_labels, sample_paths, _counts, errors = load_split(dataset, split)
+        features, labels, class_labels, sample_paths, _counts, errors = load_split(
+            dataset, split, args.feature
+        )
         report[split] = evaluate(model, (features - mean) / scale, labels, class_labels, sample_paths)
         report["discarded"].extend(errors)
     report_path = ROOT / args.report

@@ -18,11 +18,15 @@ class WorkbenchShapeTrainingTests(unittest.TestCase):
         self.assertIn('"confusion_matrix"', source)
         self.assertIn('"misclassified"', source)
         self.assertIn('"per_class"', source)
+        self.assertIn('choices=("contour", "hog", "hybrid")', source)
+        self.assertIn('augmented_images', source)
 
     def test_feature_module_is_colour_agnostic_and_has_three_labels(self):
         source = (ROOT / "tools/vision/shape_classifier.py").read_text(encoding="utf-8")
         self.assertIn('SHAPE_LABELS = ("cube", "cylinder", "triangular_pyramid")', source)
         self.assertIn('cv2.HuMoments', source)
+        self.assertIn('extract_hog_shape_features', source)
+        self.assertIn('cv2.HOGDescriptor', source)
         self.assertIn('largest saturated object contour', source)
 
 

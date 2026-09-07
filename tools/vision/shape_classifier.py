@@ -23,6 +23,28 @@ class ShapeFeatures:
     vertices: int
 
 
+def extract_hog_shape_features(image: np.ndarray) -> np.ndarray:
+    """Return image-based shape features from a padded single-block crop.
+
+    HOG preserves the object's edges, shading and visible side faces.  Those
+    cues distinguish a cube from a cylinder when simple contour statistics
+    change under perspective or lighting.
+    """
+    import cv2
+
+    if image is None or image.size == 0:
+        raise ValueError("empty shape sample")
+    height, width = image.shape[:2]
+    side = max(height, width)
+    canvas = np.full((side, side, 3), 255, dtype=np.uint8)
+    top = (side - height) // 2
+    left = (side - width) // 2
+    canvas[top : top + height, left : left + width] = image
+    gray = cv2.cvtColor(cv2.resize(canvas, (96, 96), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)
+    hog = cv2.HOGDescriptor((96, 96), (32, 32), (16, 16), (16, 16), 9)
+    return hog.compute(gray).reshape(-1).astype(np.float32)
+
+
 def extract_shape_features(image: np.ndarray) -> ShapeFeatures:
     """Return rotation-tolerant contour features for one coloured object ROI."""
     import cv2
