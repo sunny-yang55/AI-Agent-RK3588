@@ -2,12 +2,12 @@
 """Capture labelled workbench ROI samples for the three-shape classifier.
 
 Example:
-    venv/bin/python scripts/capture_workbench_shape_samples.py cube
+    venv/bin/python scripts/capture_workbench_shape_samples.py green cube
 
-Place one labelled shape on the white board, press ``s`` to save a frame, and
-press ``q`` or Esc to finish.  Capture 15-20 samples per shape, changing its
-position and rotation.  The images never leave the RK3588 unless the operator
-copies them elsewhere.
+Place exactly one labelled object on the white board, press ``s`` to save a
+frame, and press ``q`` or Esc to finish.  Capture 20-30 independently posed
+samples per colour/shape class.  The images never leave the RK3588 unless the
+operator copies them elsewhere.
 """
 
 from __future__ import annotations
@@ -22,11 +22,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+COLORS = ("red", "yellow", "blue", "green")
 SHAPES = ("cube", "cylinder", "triangular_pyramid")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("color", choices=COLORS, help="ground-truth colour label")
     parser.add_argument("shape", choices=SHAPES, help="ground-truth shape label")
     parser.add_argument("--output", default="datasets/workbench_shapes")
     return parser.parse_args()
@@ -43,13 +45,14 @@ def main() -> int:
     if roi is None:
         print("[Shapes] Missing config/workbench_roi.json; calibrate the workbench first.")
         return 2
-    output_dir = ROOT / args.output / args.shape
+    label = f"{args.color}_{args.shape}"
+    output_dir = ROOT / args.output / label
     output_dir.mkdir(parents=True, exist_ok=True)
     camera = OpenCVCameraSource()
     saved = 0
     try:
         camera.open()
-        print(f"[Shapes] label={args.shape}; s=save, q/Esc=quit")
+        print(f"[Shapes] label={label}; s=save, q/Esc=quit")
         while True:
             image = camera.read().image
             clipped = roi.clipped(image)
@@ -63,7 +66,7 @@ def main() -> int:
             )
             cv2.putText(
                 preview,
-                f"shape={args.shape} saved={saved}",
+                f"label={label} saved={saved}",
                 (20, 32),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.8,
@@ -81,7 +84,7 @@ def main() -> int:
                     clipped.x : clipped.x + clipped.width,
                 ]
                 stamp = time.strftime("%Y%m%d-%H%M%S")
-                target = output_dir / f"{args.shape}-{stamp}-{saved:03d}.jpg"
+                target = output_dir / f"{label}-{stamp}-{saved:03d}.jpg"
                 if cv2.imwrite(str(target), crop):
                     saved += 1
                     print(f"[Shapes] saved {target.relative_to(ROOT)}")
