@@ -159,6 +159,17 @@ class VisionProcessChildTests(unittest.TestCase):
 
 
 class VisionProcessParentTests(unittest.TestCase):
+    def test_snapshot_returns_jpeg_bytes(self):
+        service = ProcessVisionService()
+        service._process = type("Process", (), {"is_alive": lambda self: True})()
+        service.session.request_start()
+        service.session.mark_active()
+        service._connection = FakeConnection(
+            [{"event": "snapshot", "jpeg": b"jpeg"}], wait_for_send=True
+        )
+        self.assertEqual(service.snapshot(), b"jpeg")
+        self.assertEqual(service._connection.sent, [{"command": "snapshot"}])
+
     def test_locate_workbench_returns_structured_objects(self):
         service = ProcessVisionService()
         service._process = type("Process", (), {"is_alive": lambda self: True})()

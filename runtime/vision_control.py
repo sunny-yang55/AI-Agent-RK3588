@@ -4,15 +4,20 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from tools.vision.session import VisionCommand, classify_vision_command
+from tools.vision.session import (
+    VisionCommand,
+    classify_vision_command,
+    is_broad_scene_query,
+)
 
 
 class VisionVoiceController:
     """Handle visual controls locally so they never reach the LLM."""
 
-    def __init__(self, service, speak: Callable[..., object]) -> None:
+    def __init__(self, service, speak: Callable[..., object], *, scene_describer=None) -> None:
         self.service = service
         self._speak = speak
+        self._scene_describer = scene_describer
 
     def handle(self, text: str) -> bool:
         was_running = self.service.is_running
@@ -38,7 +43,8 @@ class VisionVoiceController:
                 )
                 return True
             try:
-                message = self.service.describe(text)
+                details = self._describe_details(text)
+                message = self._describe_scene(text, details)
             except Exception as exc:
                 message = f"视觉识别失败：{exc}"
             self._speak(message, allow_interrupt=True)
@@ -52,6 +58,27 @@ class VisionVoiceController:
             message = "摄像头已经关闭。"
         self._speak(message, allow_interrupt=True)
         return True
+
+    def _describe_details(self, text: str) -> dict:
+        details_method = getattr(self.service, "describe_details", None)
+        if details_method is not None:
+            return dict(details_method(text))
+        return {"summary": self.service.describe(text), "detections": [], "workbench_objects": []}
+
+    def _describe_scene(self, text: str, details: dict) -> str:
+        """Use cloud narration only for broad scene questions and fail locally."""
+        describer = self._scene_describer
+        if describer is None:
+            return str(details["summary"])
+        if not (describer.is_available and is_broad_scene_query(text)):
+            return str(details["summary"])
+        try:
+            image_jpeg = self.service.snapshot()
+            return describer.describe(image_jpeg, text, details)
+        except Exception as exc:
+            # A network/API failure must never take down local perception.
+            print(f"[Vision] Online scene description unavailable: {exc}")
+            return str(details["summary"])
 
     def close(self) -> None:
         """Silently release vision resources during runtime shutdown."""

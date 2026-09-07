@@ -14,6 +14,7 @@ from tools.common.entity_resolver import EntityResolver
 from tools.llm.adapter import LLMAdapter
 from tools.speech import SpeechManager
 from tools.vision.process_service import ProcessVisionService
+from tools.vision.online_describer import OnlineVisionDescriber
 
 
 class RuntimeManager:
@@ -29,6 +30,7 @@ class RuntimeManager:
         self.vision = VisionVoiceController(
             ProcessVisionService(),
             self.speech.speak,
+            scene_describer=OnlineVisionDescriber(),
         )
 
         ui.debug("[系统] AI核心加载完成")

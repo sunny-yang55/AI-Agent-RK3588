@@ -60,6 +60,13 @@ class FakeService:
         self.query = query
         return self.description
 
+    def describe_details(self, query=""):
+        self.query = query
+        return {"summary": self.description, "detections": [], "workbench_objects": []}
+
+    def snapshot(self):
+        return b"jpeg"
+
 
 class VisionVoiceControllerTests(unittest.TestCase):
     def make_controller(self, service):
@@ -114,6 +121,28 @@ class VisionVoiceControllerTests(unittest.TestCase):
         self.assertEqual(service.starts, 0)
         self.assertIn("尚未打开", spoken[0][0])
         self.assertTrue(spoken[0][1]["allow_interrupt"])
+
+    def test_online_scene_description_replaces_only_broad_local_summary(self):
+        service = FakeService(running=True)
+        describer = SimpleNamespace(
+            is_available=True,
+            describe=lambda image, query, facts: "我看到一个白色杯子，需要我定位它吗？",
+        )
+        controller, spoken = self.make_controller(service)
+        controller._scene_describer = describer
+        self.assertTrue(controller.handle("看一下前面有什么东西"))
+        self.assertIn("白色杯子", spoken[0][0])
+
+    def test_precise_color_question_keeps_fast_local_path(self):
+        service = FakeService(running=True)
+        describer = SimpleNamespace(
+            is_available=True,
+            describe=lambda *args: self.fail("cloud should not be used"),
+        )
+        controller, spoken = self.make_controller(service)
+        controller._scene_describer = describer
+        self.assertTrue(controller.handle("有没有红色物块"))
+        self.assertEqual(spoken[0][0], service.description)
 
     def test_runtime_close_is_silent(self):
         service = FakeService(running=True)

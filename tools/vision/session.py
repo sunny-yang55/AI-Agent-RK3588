@@ -70,6 +70,17 @@ _ACTIVE_VISUAL_FOLLOWUPS = (
     "你看看",
 )
 
+_BROAD_SCENE_WORDS = (
+    "前面", "画面", "这是什么", "有什么东西", "有什么物体", "有哪些东西",
+    "桌上有什么", "桌面有什么", "工作台有什么", "看到了什么", "看到什么",
+)
+
+
+def is_broad_scene_query(text: str) -> bool:
+    """Whether a question benefits from an online scene-language model."""
+    clean = text.replace(" ", "")
+    return any(word in clean for word in _BROAD_SCENE_WORDS)
+
 
 def _normalize(text: str) -> str:
     text = re.sub(r"<\|.*?\|>", "", text)

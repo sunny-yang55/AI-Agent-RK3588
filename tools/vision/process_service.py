@@ -114,6 +114,15 @@ def _vision_process_main(
                             ],
                         }
                     )
+                if command == "snapshot":
+                    import cv2
+
+                    encoded, jpeg = cv2.imencode(
+                        ".jpg", frame.image, [cv2.IMWRITE_JPEG_QUALITY, 85]
+                    )
+                    if not encoded:
+                        raise RuntimeError("failed to encode camera snapshot")
+                    connection.send({"event": "snapshot", "jpeg": jpeg.tobytes()})
                 if command == "locate_workbench":
                     connection.send(
                         {
@@ -265,6 +274,10 @@ class ProcessVisionService:
 
     def describe(self, query: str = "", *, timeout: float = 3.0) -> str:
         """Request the latest stable detection summary from the child."""
+        return str(self.describe_details(query, timeout=timeout)["summary"])
+
+    def describe_details(self, query: str = "", *, timeout: float = 3.0) -> dict:
+        """Return local visual facts for speech and optional cloud narration."""
         if not self.is_running or self._connection is None:
             raise RuntimeError("vision service is not running")
         self._connection.send({"command": "describe", "query": query})
@@ -275,9 +288,25 @@ class ProcessVisionService:
                 break
             message = self._connection.recv()
             if message.get("event") == "description":
-                return str(message["summary"])
+                return message
             self._handle_message(message)
         raise TimeoutError("vision description timed out")
+
+    def snapshot(self, *, timeout: float = 3.0) -> bytes:
+        """Return one fresh JPEG frame without moving camera ownership."""
+        if not self.is_running or self._connection is None:
+            raise RuntimeError("vision service is not running")
+        self._connection.send({"command": "snapshot"})
+        deadline = time.monotonic() + max(0.0, timeout)
+        while time.monotonic() < deadline:
+            remaining = deadline - time.monotonic()
+            if not self._connection.poll(remaining):
+                break
+            message = self._connection.recv()
+            if message.get("event") == "snapshot":
+                return bytes(message["jpeg"])
+            self._handle_message(message)
+        raise TimeoutError("camera snapshot timed out")
 
     def locate_workbench(self, *, timeout: float = 3.0) -> list[dict]:
         """Return structured pixel-space objects for robot integration."""
