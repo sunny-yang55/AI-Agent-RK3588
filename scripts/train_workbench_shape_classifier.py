@@ -42,7 +42,7 @@ def load_split(dataset: Path, split: str):
 
     from tools.vision.shape_classifier import SHAPE_LABELS, extract_shape_features
 
-    features, labels, sample_paths, errors, counts = [], [], [], [], Counter()
+    features, labels, class_labels, sample_paths, errors, counts = [], [], [], [], [], Counter()
     for colour_shape_dir in sorted(path for path in dataset.iterdir() if path.is_dir()):
         shape = next(
             (
@@ -59,6 +59,7 @@ def load_split(dataset: Path, split: str):
             try:
                 features.append(extract_shape_features(image).values)
                 labels.append(SHAPE_LABELS.index(shape))
+                class_labels.append(colour_shape_dir.name)
                 sample_paths.append(path.relative_to(ROOT).as_posix())
                 counts[colour_shape_dir.name] += 1
             except ValueError as exc:
@@ -66,13 +67,20 @@ def load_split(dataset: Path, split: str):
     return (
         np.asarray(features, dtype=np.float32),
         np.asarray(labels, dtype=np.int32),
+        class_labels,
         sample_paths,
         counts,
         errors,
     )
 
 
-def evaluate(model, features: np.ndarray, labels: np.ndarray, sample_paths: list[str]) -> dict:
+def evaluate(
+    model,
+    features: np.ndarray,
+    labels: np.ndarray,
+    class_labels: list[str],
+    sample_paths: list[str],
+) -> dict:
     from tools.vision.shape_classifier import SHAPE_LABELS
 
     if not len(labels):
@@ -80,12 +88,14 @@ def evaluate(model, features: np.ndarray, labels: np.ndarray, sample_paths: list
             "samples": 0,
             "accuracy": None,
             "per_shape": {},
+            "per_class": {},
             "confusion_matrix": {},
             "misclassified": [],
         }
     _ok, predicted = model.predict(features)
     predicted = predicted.reshape(-1).astype(np.int32)
     per_shape = {}
+    per_class = {}
     confusion_matrix = {}
     for index, label in enumerate(SHAPE_LABELS):
         mask = labels == index
@@ -97,19 +107,33 @@ def evaluate(model, features: np.ndarray, labels: np.ndarray, sample_paths: list
             predicted_label: int(((labels == index) & (predicted == predicted_index)).sum())
             for predicted_index, predicted_label in enumerate(SHAPE_LABELS)
         }
+    for class_label in sorted(set(class_labels)):
+        mask = np.asarray([value == class_label for value in class_labels])
+        actual_shape = SHAPE_LABELS[int(labels[mask][0])]
+        per_class[class_label] = {
+            "shape": actual_shape,
+            "samples": int(mask.sum()),
+            "accuracy": round(float((predicted[mask] == labels[mask]).mean()), 4),
+            "predicted_as": {
+                predicted_label: int((predicted[mask] == predicted_index).sum())
+                for predicted_index, predicted_label in enumerate(SHAPE_LABELS)
+            },
+        }
     misclassified = [
         {
+            "class": class_label,
             "actual": SHAPE_LABELS[int(actual)],
             "predicted": SHAPE_LABELS[int(prediction)],
             "image": path,
         }
-        for actual, prediction, path in zip(labels, predicted, sample_paths)
+        for actual, prediction, class_label, path in zip(labels, predicted, class_labels, sample_paths)
         if actual != prediction
     ]
     return {
         "samples": int(len(labels)),
         "accuracy": round(float((predicted == labels).mean()), 4),
         "per_shape": per_shape,
+        "per_class": per_class,
         "confusion_matrix": confusion_matrix,
         "misclassified": misclassified,
     }
@@ -125,7 +149,7 @@ def main() -> int:
     if not dataset.is_dir():
         print(f"[ShapeTrain] dataset not found: {dataset}")
         return 2
-    train_x, train_y, _train_paths, train_counts, train_errors = load_split(dataset, "train")
+    train_x, train_y, _train_classes, _train_paths, train_counts, train_errors = load_split(dataset, "train")
     required = {label for label in SHAPE_LABELS if not (train_y == SHAPE_LABELS.index(label)).any()}
     if required:
         print(f"[ShapeTrain] missing train samples for: {', '.join(sorted(required))}")
@@ -149,8 +173,8 @@ def main() -> int:
     )
     report = {"train_counts": dict(train_counts), "discarded": train_errors}
     for split in ("train", "val", "test"):
-        features, labels, sample_paths, _counts, errors = load_split(dataset, split)
-        report[split] = evaluate(model, (features - mean) / scale, labels, sample_paths)
+        features, labels, class_labels, sample_paths, _counts, errors = load_split(dataset, split)
+        report[split] = evaluate(model, (features - mean) / scale, labels, class_labels, sample_paths)
         report["discarded"].extend(errors)
     report_path = ROOT / args.report
     report_path.parent.mkdir(parents=True, exist_ok=True)

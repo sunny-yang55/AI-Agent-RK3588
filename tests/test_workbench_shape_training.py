@@ -17,6 +17,7 @@ class WorkbenchShapeTrainingTests(unittest.TestCase):
         self.assertIn('shape-model-report.json', source)
         self.assertIn('"confusion_matrix"', source)
         self.assertIn('"misclassified"', source)
+        self.assertIn('"per_class"', source)
 
     def test_feature_module_is_colour_agnostic_and_has_three_labels(self):
         source = (ROOT / "tools/vision/shape_classifier.py").read_text(encoding="utf-8")
