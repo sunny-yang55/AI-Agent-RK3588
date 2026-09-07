@@ -11,6 +11,13 @@ from tools.vision.session import (
 )
 
 
+_WORKBENCH_TERMS = ("工作台", "桌上", "桌面", "物块", "方块", "正方体", "圆柱", "三棱锥")
+
+
+def _is_workbench_request(text: str) -> bool:
+    return any(term in text.replace(" ", "") for term in _WORKBENCH_TERMS)
+
+
 class VisionVoiceController:
     """Handle visual controls locally so they never reach the LLM."""
 
@@ -68,7 +75,7 @@ class VisionVoiceController:
     def _describe_scene(self, text: str, details: dict) -> str:
         """Use cloud narration only for broad scene questions and fail locally."""
         describer = self._scene_describer
-        if describer is None:
+        if describer is None or _is_workbench_request(text):
             return str(details["summary"])
         if not (describer.is_available and is_broad_scene_query(text)):
             return str(details["summary"])

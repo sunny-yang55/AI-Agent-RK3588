@@ -144,6 +144,17 @@ class VisionVoiceControllerTests(unittest.TestCase):
         self.assertTrue(controller.handle("有没有红色物块"))
         self.assertEqual(spoken[0][0], service.description)
 
+    def test_workbench_summary_keeps_reviewed_local_shape_path(self):
+        service = FakeService(running=True)
+        describer = SimpleNamespace(
+            is_available=True,
+            describe=lambda *args: self.fail("cloud should not replace workbench facts"),
+        )
+        controller, spoken = self.make_controller(service)
+        controller._scene_describer = describer
+        self.assertTrue(controller.handle("工作台上有什么物块"))
+        self.assertEqual(spoken[0][0], service.description)
+
     def test_runtime_close_is_silent(self):
         service = FakeService(running=True)
         controller, spoken = self.make_controller(service)
