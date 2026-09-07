@@ -216,9 +216,12 @@ class ColorBlockDetector:
         return sorted(detections, key=lambda item: item.area_pixels, reverse=True)
 
 
-def summarize_colored_blocks(detections: list[ColoredBlockDetection]) -> str:
+def summarize_colored_blocks(
+    detections: list[ColoredBlockDetection], *, interactive: bool = False
+) -> str:
     if not detections:
-        return "工作台上暂时没有检测到彩色物块。"
+        answer = "我暂时没有在工作台上发现彩色物块。"
+        return answer + "您可以调整物块位置后让我再看一次。" if interactive else answer
     counts = {}
     for item in detections:
         label = (
@@ -230,7 +233,10 @@ def summarize_colored_blocks(detections: list[ColoredBlockDetection]) -> str:
         f"{count}个{label}"
         for label, count in counts.items()
     ]
-    return "我在工作台上看到" + "、".join(parts) + "。"
+    answer = "我在工作台上看到" + "、".join(parts) + "。"
+    if interactive:
+        return answer + "需要我定位其中某一个，还是继续查看其他物品？"
+    return answer
 
 
 def answer_workbench_query(
@@ -261,10 +267,10 @@ def answer_workbench_query(
             if not requested_colors or item.color in requested_colors
         ]
         if not requested_colors:
-            return "请告诉我需要定位哪一种颜色的物块。"
+            return "请告诉我需要定位哪一种颜色和形状的物块，例如“红色正方体在哪里”。"
         target = "、".join(COLOR_ZH[color] for color in sorted(requested_colors))
         if not matches:
-            return f"暂时没有看到{target}物块，无法定位。"
+            return f"我暂时没有看到{target}物块，因此不能给出坐标。您可以调整摆放后让我重新查看。"
         positions = "；".join(
             f"({item.center_roi[0]}, {item.center_roi[1]})" for item in matches
         )
@@ -279,18 +285,20 @@ def answer_workbench_query(
                     f"({item.center_roi[0]}, {item.center_roi[1]})" for item in verified_matches
                 )
                 return (
-                    f"检测到{len(verified_matches)}个{target}{shape_text}，"
+                    f"我已经找到{len(verified_matches)}个{target}{shape_text}，"
                     f"工作台像素坐标为{positions}。"
                     "坐标原点是标定板左上角，尚未换算为机械臂坐标。"
+                    "需要我继续定位其他物块吗？"
                 )
             return (
                 f"当前还不能可靠区分{target}物块是否为{shape_text}，"
                 f"但检测到{len(matches)}个{target}物块，坐标为{positions}。"
-                "请先按颜色定位，形状定位需要完成专用标定。"
+                "为避免抓错，我建议先按颜色定位，或让我重新确认一次。"
             )
         return (
-            f"检测到{len(matches)}个{target}物块，工作台像素坐标为{positions}。"
+            f"我已经找到{len(matches)}个{target}物块，工作台像素坐标为{positions}。"
             "坐标原点是标定板左上角，尚未换算为机械臂坐标。"
+            "还需要我继续定位其他物块吗？"
         )
     if requested_shapes:
         requested_color_objects = [
@@ -302,28 +310,28 @@ def answer_workbench_query(
             if item.shape_verified and item.shape in requested_shapes
         ]
         if verified_matches:
-            return summarize_colored_blocks(verified_matches).replace("我在工作台上", "")
+            return summarize_colored_blocks(verified_matches, interactive=True).replace("我在工作台上", "")
         if requested_color_objects:
             color_text = "、".join(
                 sorted({item.color_zh for item in requested_color_objects})
             )
-            return f"看到了{color_text}物块，但目前还不能可靠确认它的形状。"
+            return f"我看到了{color_text}物块，但形状还不够稳定。为了避免误判，您可以让我再确认一次。"
         target_color = "".join(COLOR_ZH[color] for color in sorted(requested_colors))
-        return f"暂时没有看到{target_color}物块。"
+        return f"我暂时没有看到{target_color}物块。需要我重新查看工作台吗？"
     if not requested_colors and not requested_shapes:
-        return summarize_colored_blocks(detections)
+        return summarize_colored_blocks(detections, interactive=True)
     matches = [
         item for item in detections
         if (not requested_colors or item.color in requested_colors)
         and (not requested_shapes or item.shape in requested_shapes)
     ]
     if matches:
-        return summarize_colored_blocks(matches).replace("我在工作台上", "")
+        return summarize_colored_blocks(matches, interactive=True).replace("我在工作台上", "")
     target = "".join(COLOR_ZH[color] for color in requested_colors)
     target += "".join(shape_labels[shape] for shape in requested_shapes)
     if requested_colors and not requested_shapes:
         target += "物块"
-    return f"暂时没有看到{target}。"
+    return f"我暂时没有看到{target}。您可以调整它的位置后让我再确认。"
 
 
 def select_stable_workbench_snapshot(

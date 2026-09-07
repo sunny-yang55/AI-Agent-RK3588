@@ -79,11 +79,11 @@ class WorkbenchVisionTests(unittest.TestCase):
         detections = ColorBlockDetector().detect(image)
         self.assertEqual(
             answer_workbench_query("有没有绿色物块", detections),
-            "看到1个绿色物块。",
+            "看到1个绿色物块。需要我定位其中某一个，还是继续查看其他物品？",
         )
         self.assertEqual(
             answer_workbench_query("有没有红色三棱锥", detections),
-            "看到了红色物块，但目前还不能可靠确认它的形状。",
+            "我看到了红色物块，但形状还不够稳定。为了避免误判，您可以让我再确认一次。",
         )
 
     def test_asr_shape_alias_keeps_answer_grounded(self):
@@ -92,7 +92,7 @@ class WorkbenchVisionTests(unittest.TestCase):
         detections = ColorBlockDetector().detect(image)
         self.assertEqual(
             answer_workbench_query("有没有红色三轮锥", detections),
-            "看到了红色物块，但目前还不能可靠确认它的形状。",
+            "我看到了红色物块，但形状还不够稳定。为了避免误判，您可以让我再确认一次。",
         )
 
     def test_color_location_returns_roi_pixel_coordinates(self):
@@ -125,7 +125,8 @@ class WorkbenchVisionTests(unittest.TestCase):
         item = ColorBlockDetector().detect(image)[0]
         verified = type(item)(**{**item.__dict__, "shape": "cube", "shape_zh": "正方体", "shape_verified": True})
         answer = answer_workbench_query("红色正方体在哪里", [verified])
-        self.assertIn("检测到1个红色正方体", answer)
+        self.assertIn("我已经找到1个红色正方体", answer)
+        self.assertIn("需要我继续定位", answer)
         self.assertIn("工作台像素坐标", answer)
 
     def test_stable_snapshot_ignores_one_frame_shape_flip(self):
