@@ -10,27 +10,24 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-TOOLS_PACKAGE = types.ModuleType("tools")
-TOOLS_PACKAGE.__path__ = [str(ROOT / "tools")]
-VISION_PACKAGE = types.ModuleType("tools.vision")
-VISION_PACKAGE.__path__ = [str(ROOT / "tools/vision")]
-sys.modules.setdefault("tools", TOOLS_PACKAGE)
-sys.modules.setdefault("tools.vision", VISION_PACKAGE)
+PACKAGE = types.ModuleType("online_vision_test_package")
+PACKAGE.__path__ = [str(ROOT / "tools/vision")]
+sys.modules[PACKAGE.__name__] = PACKAGE
 
 
 def load(name):
     spec = importlib.util.spec_from_file_location(
-        name, ROOT / "tools/vision" / f"{name.rsplit('.', 1)[-1]}.py"
+        f"{PACKAGE.__name__}.{name}", ROOT / "tools/vision" / f"{name}.py"
     )
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
 
-load("tools.vision.session")
-module = load("tools.vision.online_describer")
+load("session")
+module = load("online_describer")
 OnlineVisionDescriber = module.OnlineVisionDescriber
 should_use_online_scene_description = module.should_use_online_scene_description
 
