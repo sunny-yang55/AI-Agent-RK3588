@@ -68,6 +68,9 @@ _ACTIVE_VISUAL_FOLLOWUPS = (
     "看一看",
     "帮我看",
     "你看看",
+    "再确认一下形状",
+    "确认一下形状",
+    "确认形状",
 )
 
 _BROAD_SCENE_WORDS = (
@@ -102,7 +105,7 @@ def classify_vision_command(
         return VisionCommand.DESCRIBE
     workbench_terms = (
         "桌上", "桌面", "工作台", "物块", "方块",
-        "正方体", "圆柱", "三棱锥", "三轮锥", "三菱锥",
+        "正方体", "圆柱", "三棱锥", "三轮锥", "三菱锥", "形状",
         "圆珠体", "三轮车",
         "红色", "黄色", "蓝色", "绿色",
     )

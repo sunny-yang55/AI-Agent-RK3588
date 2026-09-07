@@ -138,8 +138,11 @@ def classify_workbench_shapes(
 ) -> list[ColoredBlockDetection]:
     """Attach reviewed-model shapes to detected colour blocks.
 
-    A failed per-block prediction remains unverified and is deliberately not
-    used for shape-specific speech or robot targeting.
+    A shape requires two independent signals: the colour contour's geometric
+    estimate and the learned crop classifier must agree.  A learned model can
+    be confidently wrong when a block overlaps a printed target marker or its
+    lighting/pose differs from the sample set.  Disagreement stays explicitly
+    unverified and is never used for shape-specific speech or robot targeting.
     """
     classified = []
     for item in detections:
@@ -149,9 +152,12 @@ def classify_workbench_shapes(
         crop_y2 = min(image.shape[0], y2 + padding)
         try:
             shape = classifier.predict(image[crop_y1:crop_y2, crop_x1:crop_x2])
-            classified.append(
-                replace(item, shape=shape, shape_zh=SHAPE_ZH[shape], shape_verified=True)
-            )
+            if shape == item.shape:
+                classified.append(
+                    replace(item, shape=shape, shape_zh=SHAPE_ZH[shape], shape_verified=True)
+                )
+            else:
+                classified.append(replace(item, shape_verified=False))
         except (ValueError, KeyError):
             classified.append(item)
     return classified
@@ -421,7 +427,7 @@ def stabilize_verified_workbench_shapes(
 def is_workbench_query(text: str) -> bool:
     return any(
         phrase in text
-        for phrase in ("工作台", "桌面", "桌上", "物块", "方块", "正方体", "圆柱", "圆珠体", "三棱锥", "三轮锥", "三菱锥", "三轮车", "红色", "黄色", "蓝色", "绿色")
+        for phrase in ("工作台", "桌面", "桌上", "物块", "方块", "正方体", "圆柱", "圆珠体", "三棱锥", "三轮锥", "三菱锥", "三轮车", "形状", "红色", "黄色", "蓝色", "绿色")
     )
 
 

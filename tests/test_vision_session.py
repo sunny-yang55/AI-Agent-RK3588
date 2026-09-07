@@ -77,7 +77,7 @@ class VisionCommandTests(unittest.TestCase):
             )
 
     def test_short_shape_questions_and_asr_aliases_are_visual(self):
-        for phrase in ("有黄色正方体吗", "有没有红色三轮锥"):
+        for phrase in ("有黄色正方体吗", "有没有红色三轮锥", "你再确认一下形状"):
             self.assertEqual(
                 classify_vision_command(phrase, active=True),
                 VisionCommand.DESCRIBE,

@@ -12,6 +12,7 @@ from tools.vision.workbench import (
     ColorBlockDetector,
     WorkbenchROI,
     answer_workbench_query,
+    classify_workbench_shapes,
     load_workbench_roi,
     is_workbench_query,
     save_workbench_roi,
@@ -66,6 +67,20 @@ class WorkbenchVisionTests(unittest.TestCase):
         shapes = {(item.color, item.shape) for item in detections}
         self.assertIn(("green", "cylinder"), shapes)
         self.assertIn(("blue", "triangular_pyramid"), shapes)
+
+    def test_shape_disagreement_is_not_verified(self):
+        class ContradictingClassifier:
+            @staticmethod
+            def predict(_image):
+                return "triangular_pyramid"
+
+        image = np.full((200, 300, 3), 255, dtype=np.uint8)
+        cv2.rectangle(image, (40, 40), (110, 110), (0, 255, 0), -1)
+        geometric_cube = ColorBlockDetector().detect(image)[0]
+        self.assertEqual(geometric_cube.shape, "cube")
+        result = classify_workbench_shapes(image, [geometric_cube], ContradictingClassifier())
+        self.assertFalse(result[0].shape_verified)
+        self.assertEqual(result[0].shape, "cube")
 
     def test_workbench_queries_are_routed_to_color_channel(self):
         for text in ("桌面有什么", "桌上有什么", "看到绿色物块了吗", "有没有红色方块"):
