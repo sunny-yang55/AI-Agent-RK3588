@@ -33,6 +33,7 @@ def _vision_process_main(
     stabilizer = None
     workbench_detector = None
     workbench_roi = None
+    shape_classifier = None
     workbench_detections = []
     stable_workbench_detections = []
     workbench_history = deque(maxlen=5)
@@ -53,10 +54,18 @@ def _vision_process_main(
         camera_format = camera.open()
         if detection_enabled:
             from .workbench import ColorBlockDetector, load_workbench_roi
+            from .shape_classifier import WorkbenchShapeClassifier
 
             roi_path = Path(__file__).resolve().parents[2] / "config/workbench_roi.json"
             workbench_roi = load_workbench_roi(roi_path)
             workbench_detector = ColorBlockDetector(workbench_roi)
+            model_path = Path(__file__).resolve().parents[2] / "models/vision/workbench_shape_svm.xml"
+            try:
+                shape_classifier = WorkbenchShapeClassifier(model_path)
+                print(f"[Vision] Workbench shape model enabled: {model_path}")
+            except Exception as exc:
+                shape_classifier = None
+                print(f"[Vision] Workbench shape model unavailable: {exc}")
         connection.send(
             {
                 "event": "active",
@@ -74,6 +83,12 @@ def _vision_process_main(
             display_image = frame.image
             if workbench_detector is not None:
                 workbench_detections = workbench_detector.detect(frame.image)
+                if shape_classifier is not None:
+                    from .workbench import classify_workbench_shapes
+
+                    workbench_detections = classify_workbench_shapes(
+                        frame.image, workbench_detections, shape_classifier
+                    )
                 workbench_history.append(workbench_detections)
                 from .workbench import select_stable_workbench_snapshot
 

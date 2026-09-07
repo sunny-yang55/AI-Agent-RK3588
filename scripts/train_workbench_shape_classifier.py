@@ -48,17 +48,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def shape_feature(image: np.ndarray, feature_mode: str) -> np.ndarray:
-    from tools.vision.shape_classifier import extract_hog_shape_features, extract_shape_features
-
-    if feature_mode == "contour":
-        return extract_shape_features(image).values
-    hog = extract_hog_shape_features(image)
-    if feature_mode == "hog":
-        return hog
-    return np.concatenate((extract_shape_features(image).values, hog)).astype(np.float32)
-
-
 def augmented_images(image: np.ndarray) -> list[np.ndarray]:
     """Create modest training-only variants without changing the test set."""
     import cv2
@@ -82,7 +71,7 @@ def augmented_images(image: np.ndarray) -> list[np.ndarray]:
 def load_split(dataset: Path, split: str, feature_mode: str, *, augment: bool = False):
     import cv2
 
-    from tools.vision.shape_classifier import SHAPE_LABELS
+    from tools.vision.shape_classifier import SHAPE_LABELS, extract_shape_vector
 
     features, labels, class_labels, sample_paths, errors, counts = [], [], [], [], [], Counter()
     for colour_shape_dir in sorted(path for path in dataset.iterdir() if path.is_dir()):
@@ -101,7 +90,7 @@ def load_split(dataset: Path, split: str, feature_mode: str, *, augment: bool = 
             try:
                 candidates = augmented_images(image) if augment else [image]
                 for candidate in candidates:
-                    features.append(shape_feature(candidate, feature_mode))
+                    features.append(extract_shape_vector(candidate, feature_mode))
                     labels.append(SHAPE_LABELS.index(shape))
                     class_labels.append(colour_shape_dir.name)
                     sample_paths.append(path.relative_to(ROOT).as_posix())
@@ -214,7 +203,10 @@ def main() -> int:
     model.save(str(output_model))
     metadata_path = output_model.with_suffix(".json")
     metadata_path.write_text(
-        json.dumps({"labels": SHAPE_LABELS, "mean": mean.tolist(), "scale": scale.tolist()}, indent=2) + "\n",
+        json.dumps(
+            {"labels": SHAPE_LABELS, "feature_mode": args.feature, "mean": mean.tolist(), "scale": scale.tolist()},
+            indent=2,
+        ) + "\n",
         encoding="utf-8",
     )
     report = {

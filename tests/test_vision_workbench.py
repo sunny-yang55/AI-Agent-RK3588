@@ -117,6 +117,15 @@ class WorkbenchVisionTests(unittest.TestCase):
         self.assertIn("不能可靠区分", answer)
         self.assertIn("2个绿色物块", answer)
 
+    def test_verified_shape_can_be_used_for_location(self):
+        image = np.full((200, 300, 3), 255, dtype=np.uint8)
+        cv2.rectangle(image, (20, 20), (80, 80), (0, 0, 255), -1)
+        item = ColorBlockDetector().detect(image)[0]
+        verified = type(item)(**{**item.__dict__, "shape": "cube", "shape_zh": "正方体", "shape_verified": True})
+        answer = answer_workbench_query("红色正方体在哪里", [verified])
+        self.assertIn("检测到1个红色正方体", answer)
+        self.assertIn("工作台像素坐标", answer)
+
     def test_stable_snapshot_ignores_one_frame_shape_flip(self):
         image = np.full((180, 220, 3), 255, dtype=np.uint8)
         cv2.rectangle(image, (40, 40), (100, 100), (0, 255, 0), -1)

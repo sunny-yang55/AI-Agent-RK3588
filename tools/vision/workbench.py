@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +18,7 @@ COLOR_RANGES = {
     "green": (((38, 60, 45), (90, 255, 255)),),
 }
 COLOR_ZH = {"red": "红色", "yellow": "黄色", "blue": "蓝色", "green": "绿色"}
+SHAPE_ZH = {"cube": "正方体", "cylinder": "圆柱体", "triangular_pyramid": "三棱锥"}
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,7 @@ class ColoredBlockDetection:
     angle_deg: float
     area_pixels: float
     confidence: float
+    shape_verified: bool = False
 
 
 @dataclass(frozen=True)
@@ -127,6 +129,34 @@ def extract_single_colored_block_crop(
     )
 
 
+def classify_workbench_shapes(
+    image: np.ndarray,
+    detections: list[ColoredBlockDetection],
+    classifier,
+    *,
+    padding: int = 16,
+) -> list[ColoredBlockDetection]:
+    """Attach reviewed-model shapes to detected colour blocks.
+
+    A failed per-block prediction remains unverified and is deliberately not
+    used for shape-specific speech or robot targeting.
+    """
+    classified = []
+    for item in detections:
+        x1, y1, x2, y2 = item.box
+        crop_x1, crop_y1 = max(0, x1 - padding), max(0, y1 - padding)
+        crop_x2 = min(image.shape[1], x2 + padding)
+        crop_y2 = min(image.shape[0], y2 + padding)
+        try:
+            shape = classifier.predict(image[crop_y1:crop_y2, crop_x1:crop_x2])
+            classified.append(
+                replace(item, shape=shape, shape_zh=SHAPE_ZH[shape], shape_verified=True)
+            )
+        except (ValueError, KeyError):
+            classified.append(item)
+    return classified
+
+
 class ColorBlockDetector:
     def __init__(self, roi: WorkbenchROI | None = None, *, min_area: float = 500.0):
         self.roi = roi
@@ -191,10 +221,14 @@ def summarize_colored_blocks(detections: list[ColoredBlockDetection]) -> str:
         return "工作台上暂时没有检测到彩色物块。"
     counts = {}
     for item in detections:
-        counts[item.color_zh] = counts.get(item.color_zh, 0) + 1
+        label = (
+            f"{item.color_zh}{item.shape_zh}"
+            if item.shape_verified else f"{item.color_zh}物块"
+        )
+        counts[label] = counts.get(label, 0) + 1
     parts = [
-        f"{count}个{color}物块"
-        for color, count in counts.items()
+        f"{count}个{label}"
+        for label, count in counts.items()
     ]
     return "我在工作台上看到" + "、".join(parts) + "。"
 
@@ -236,6 +270,19 @@ def answer_workbench_query(
         )
         if requested_shapes:
             shape_text = "、".join(shape_labels[shape] for shape in requested_shapes)
+            verified_matches = [
+                item for item in matches
+                if item.shape_verified and item.shape in requested_shapes
+            ]
+            if verified_matches:
+                positions = "；".join(
+                    f"({item.center_roi[0]}, {item.center_roi[1]})" for item in verified_matches
+                )
+                return (
+                    f"检测到{len(verified_matches)}个{target}{shape_text}，"
+                    f"工作台像素坐标为{positions}。"
+                    "坐标原点是标定板左上角，尚未换算为机械臂坐标。"
+                )
             return (
                 f"当前还不能可靠区分{target}物块是否为{shape_text}，"
                 f"但检测到{len(matches)}个{target}物块，坐标为{positions}。"
@@ -250,6 +297,12 @@ def answer_workbench_query(
             item for item in detections
             if not requested_colors or item.color in requested_colors
         ]
+        verified_matches = [
+            item for item in requested_color_objects
+            if item.shape_verified and item.shape in requested_shapes
+        ]
+        if verified_matches:
+            return summarize_colored_blocks(verified_matches).replace("我在工作台上", "")
         if requested_color_objects:
             color_text = "、".join(
                 sorted({item.color_zh for item in requested_color_objects})
@@ -280,7 +333,7 @@ def select_stable_workbench_snapshot(
     if not history:
         return []
     signatures = [
-        tuple(sorted(item.color for item in frame))
+        tuple(sorted((item.color, item.shape) for item in frame))
         for frame in history
     ]
     winning_count = max(Counter(signatures).values())

@@ -9,6 +9,8 @@ multiple target objects during labelled sample capture.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from pathlib import Path
 
 import numpy as np
 
@@ -43,6 +45,43 @@ def extract_hog_shape_features(image: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(cv2.resize(canvas, (96, 96), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)
     hog = cv2.HOGDescriptor((96, 96), (32, 32), (16, 16), (16, 16), 9)
     return hog.compute(gray).reshape(-1).astype(np.float32)
+
+
+def extract_shape_vector(image: np.ndarray, feature_mode: str) -> np.ndarray:
+    """Build the exact feature vector persisted with an SVM shape model."""
+    if feature_mode == "contour":
+        return extract_shape_features(image).values
+    hog = extract_hog_shape_features(image)
+    if feature_mode == "hog":
+        return hog
+    if feature_mode == "hybrid":
+        return np.concatenate((extract_shape_features(image).values, hog)).astype(np.float32)
+    raise ValueError(f"unsupported shape feature mode: {feature_mode}")
+
+
+class WorkbenchShapeClassifier:
+    """Optional local SVM classifier; absence of a reviewed model is safe."""
+
+    def __init__(self, model_path: str | Path) -> None:
+        import cv2
+
+        self.model_path = Path(model_path)
+        metadata_path = self.model_path.with_suffix(".json")
+        if not self.model_path.is_file() or not metadata_path.is_file():
+            raise FileNotFoundError(f"shape model is unavailable: {self.model_path}")
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        self.labels = tuple(metadata["labels"])
+        self.feature_mode = metadata.get("feature_mode", "hybrid")
+        self.mean = np.asarray(metadata["mean"], dtype=np.float32)
+        self.scale = np.maximum(np.asarray(metadata["scale"], dtype=np.float32), 1e-6)
+        self._model = cv2.ml.SVM_load(str(self.model_path))
+
+    def predict(self, image: np.ndarray) -> str:
+        vector = extract_shape_vector(image, self.feature_mode)
+        normalized = ((vector - self.mean) / self.scale).reshape(1, -1).astype(np.float32)
+        _ok, result = self._model.predict(normalized)
+        index = int(result.reshape(-1)[0])
+        return self.labels[index]
 
 
 def extract_shape_features(image: np.ndarray) -> ShapeFeatures:
