@@ -18,6 +18,9 @@ class WorkbenchShapeCaptureScriptTests(unittest.TestCase):
         self.assertIn('choices=("train", "val", "test")', source)
         self.assertIn('label / args.split', source)
         self.assertIn('load_workbench_roi', source)
+        self.assertIn('extract_single_colored_block_crop', source)
+        self.assertIn('datasets/workbench_shapes_cropped', source)
+        self.assertIn('save refused', source)
         self.assertIn('key == ord("s")', source)
         self.assertIn('q/Esc=quit', source)
 

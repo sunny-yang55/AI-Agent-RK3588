@@ -27,7 +27,11 @@ if str(ROOT) not in sys.path:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dataset", default="datasets/workbench_shapes")
+    parser.add_argument(
+        "--dataset",
+        default="datasets/workbench_shapes_cropped",
+        help="clean single-block dataset root produced by the capture tool",
+    )
     parser.add_argument("--model", default="models/vision/workbench_shape_svm.xml")
     parser.add_argument("--report", default="reports/vision-workbench/shape-model-report.json")
     return parser.parse_args()

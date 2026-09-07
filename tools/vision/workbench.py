@@ -50,6 +50,16 @@ class ColoredBlockDetection:
     confidence: float
 
 
+@dataclass(frozen=True)
+class ColoredBlockCrop:
+    """One padded, axis-aligned crop of a colour-segmented workbench block."""
+
+    color: str
+    image: np.ndarray
+    box: tuple[int, int, int, int]
+    area_pixels: float
+
+
 def load_workbench_roi(path: str | Path) -> WorkbenchROI | None:
     config_path = Path(path)
     if not config_path.is_file():
@@ -67,6 +77,56 @@ def save_workbench_roi(path: str | Path, roi: WorkbenchROI) -> None:
     )
 
 
+def _color_mask(hsv: np.ndarray, color: str) -> np.ndarray:
+    import cv2
+
+    if color not in COLOR_RANGES:
+        raise ValueError(f"unsupported block colour: {color}")
+    mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+    for lower, upper in COLOR_RANGES[color]:
+        mask |= cv2.inRange(hsv, np.asarray(lower), np.asarray(upper))
+    kernel = np.ones((5, 5), dtype=np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
+
+def extract_single_colored_block_crop(
+    image: np.ndarray,
+    color: str,
+    *,
+    min_area: float = 500.0,
+    padding: int = 16,
+) -> ColoredBlockCrop:
+    """Crop exactly one labelled colour target or reject an ambiguous frame.
+
+    Labelled shape samples must contain one target.  Refusing frames with no
+    target or more than one target prevents unrelated objects and background
+    pixels from silently entering the training set.
+    """
+    import cv2
+
+    if image is None or image.size == 0:
+        raise ValueError("empty workbench ROI")
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    mask = _color_mask(hsv, color)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    candidates = [contour for contour in contours if cv2.contourArea(contour) >= min_area]
+    if len(candidates) != 1:
+        raise ValueError(f"expected exactly one {color} block, found {len(candidates)}")
+    contour = candidates[0]
+    x, y, width, height = cv2.boundingRect(contour)
+    x1 = max(0, x - padding)
+    y1 = max(0, y - padding)
+    x2 = min(image.shape[1], x + width + padding)
+    y2 = min(image.shape[0], y + height + padding)
+    return ColoredBlockCrop(
+        color=color,
+        image=image[y1:y2, x1:x2].copy(),
+        box=(x1, y1, x2, y2),
+        area_pixels=float(cv2.contourArea(contour)),
+    )
+
+
 class ColorBlockDetector:
     def __init__(self, roi: WorkbenchROI | None = None, *, min_area: float = 500.0):
         self.roi = roi
@@ -78,14 +138,9 @@ class ColorBlockDetector:
         roi = (self.roi or WorkbenchROI(0, 0, image.shape[1], image.shape[0])).clipped(image)
         crop = image[roi.y:roi.y + roi.height, roi.x:roi.x + roi.width]
         hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-        kernel = np.ones((5, 5), dtype=np.uint8)
         detections = []
-        for color, ranges in COLOR_RANGES.items():
-            mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
-            for lower, upper in ranges:
-                mask |= cv2.inRange(hsv, np.asarray(lower), np.asarray(upper))
-            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        for color in COLOR_RANGES:
+            mask = _color_mask(hsv, color)
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             for contour in contours:
                 area = float(cv2.contourArea(contour))
